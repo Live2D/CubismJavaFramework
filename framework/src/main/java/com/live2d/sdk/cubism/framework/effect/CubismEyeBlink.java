@@ -120,24 +120,13 @@ public class CubismEyeBlink {
      * Set a parameter IDs list to blink.
      *
      * @param parameterIds A parameter IDs list
+     * @throws IllegalArgumentException if an argument is null
      */
     public void setParameterIds(List<CubismId> parameterIds) {
-        this.parameterIds = parameterIds;
-    }
-
-    /**
-     * Get the parameter ID to eye-blink.
-     * <p>If the ID does not exist at the specified index, or if the parameter list is empty, then empty instance of Optional is returned.
-     *
-     * @param index index of the parameter ID
-     * @return CubismId instance(Optional type)
-     */
-    public CubismId getParameterId(int index) {
-        if (index < 0 || index >= parameterIds.size()) {
-            return null;
+        if (parameterIds == null) {
+            throw new IllegalArgumentException("parameterIds is null.");
         }
-
-        return parameterIds.get(index);
+        this.parameterIds = parameterIds;
     }
 
     /**

@@ -105,7 +105,6 @@ class CubismMotionJson {
      * @return If motion fade-in time is set, return true.
      */
     public boolean existsMotionFadeInTime() {
-//        return json.getRoot().get(JsonKey.META.key).get(JsonKey.FADE_IN_TIME.key) != null;
         return !json.getRoot().get(JsonKey.META.key).get(JsonKey.FADE_IN_TIME.key).isNull();
     }
 
@@ -115,7 +114,6 @@ class CubismMotionJson {
      * @return If motion fade-out time is set, return true.
      */
     public boolean existsMotionFadeOutTime() {
-//        return json.getRoot().get(JsonKey.META.key).get(JsonKey.FADE_OUT_TIME.key) != null;
         return !json.getRoot().get(JsonKey.META.key).get(JsonKey.FADE_OUT_TIME.key).isNull();
     }
 
@@ -164,7 +162,6 @@ class CubismMotionJson {
      * @return If fade-in duration is set, return true.
      */
     public boolean existsMotionCurveFadeInTime(int curveIndex) {
-//        return json.getRoot().get(JsonKey.CURVES.key).get(curveIndex).get(JsonKey.FADE_IN_TIME.key) != null;
         return !json.getRoot().get(JsonKey.CURVES.key).get(curveIndex).get(JsonKey.FADE_IN_TIME.key).isNull();
     }
 
@@ -175,7 +172,6 @@ class CubismMotionJson {
      * @return If fade-out duration is set, return true.
      */
     public boolean existsMotionCurveFadeOutTime(int curveIndex) {
-//        return json.getRoot().get(JsonKey.CURVES.key).get(curveIndex).get(JsonKey.FADE_OUT_TIME.key) != null;
         return !json.getRoot().get(JsonKey.CURVES.key).get(curveIndex).get(JsonKey.FADE_OUT_TIME.key).isNull();
     }
 
@@ -206,7 +202,6 @@ class CubismMotionJson {
      * @return number of segments in the curve of the motion
      */
     public int getMotionCurveSegmentCount(int curveIndex) {
-//        return json.getRoot().get(JsonKey.CURVES.key).get(curveIndex).get(JsonKey.SEGMENTS.key).size();
         return json.getRoot().get(JsonKey.CURVES.key).get(curveIndex).get(JsonKey.SEGMENTS.key).getList().size();
     }
 

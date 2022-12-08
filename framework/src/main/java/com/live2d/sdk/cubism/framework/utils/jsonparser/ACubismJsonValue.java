@@ -1,16 +1,11 @@
 package com.live2d.sdk.cubism.framework.utils.jsonparser;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 
 public abstract class ACubismJsonValue {
-//    public CubismJsonErrorValue ERROR_VALUE;
-//    public CubismJsonNullValue NULL_VALUE;
-
-//    public ACubismJsonValue() {
-//        ERROR_VALUE = new CubismJsonErrorValue();
-//        NULL_VALUE = new CubismJsonNullValue();
-//    }
-
     /**
      * If the class implemented this interface is {@code CubismJsonObject}, returns the value corresponding to the key.
      * <p>
@@ -20,7 +15,6 @@ public abstract class ACubismJsonValue {
      * @return the value of the JSON Object
      */
     public ACubismJsonValue get(String key) {
-//        return NULL_VALUE.setErrorNotForClientCall(JsonError.TYPE_MISMATCH.message);
         ACubismJsonValue nullValue = new CubismJsonNullValue();
         nullValue.setErrorNotForClientCall(JsonError.TYPE_MISMATCH.message);
 
@@ -36,7 +30,6 @@ public abstract class ACubismJsonValue {
      * @return the value corresponding to the index
      */
     public ACubismJsonValue get(int index) {
-//        return ERROR_VALUE.setErrorNotForClientCall(JsonError.TYPE_MISMATCH.message);
         ACubismJsonValue errorValue = new CubismJsonErrorValue();
         errorValue.setErrorNotForClientCall(JsonError.TYPE_MISMATCH.message);
 
@@ -81,7 +74,6 @@ public abstract class ACubismJsonValue {
      * @return the list of {@code ICubismJsonValue}
      */
     public List<ACubismJsonValue> getList() {
-//        return null;
         return new ArrayList<ACubismJsonValue>();
     }
 
@@ -97,7 +89,6 @@ public abstract class ACubismJsonValue {
      * @return the set of the keys({@code CubismJsonString})
      */
     public List<CubismJsonString> getKeys() {
-//        return Collections.emptySet();
         return Collections.emptyList();
     }
 

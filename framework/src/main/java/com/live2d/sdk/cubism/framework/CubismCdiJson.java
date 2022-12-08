@@ -171,8 +171,6 @@ public class CubismCdiJson {
      * @return If true, the key exists
      */
     private boolean existsParameters() {
-//        ACubismJsonValue node = json.getRoot().get(JsonKey.PARAMETERS.key);
-//        return node != null;
         ACubismJsonValue node = json.getRoot().get(JsonKey.PARAMETERS.key);
         return !node.isNull() && !node.isError();
     }
@@ -184,7 +182,6 @@ public class CubismCdiJson {
      */
     private boolean existsParameterGroups() {
         ACubismJsonValue node = json.getRoot().get(JsonKey.PARAMETER_GROUPS.key);
-//        return node != null;
         return !node.isNull() && !node.isError();
     }
 
@@ -195,7 +192,6 @@ public class CubismCdiJson {
      */
     private boolean existsParts() {
         ACubismJsonValue node = json.getRoot().get(JsonKey.PARTS.key);
-//        return node != null;
         return !node.isNull() && !node.isError();
     }
 

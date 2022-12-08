@@ -61,8 +61,6 @@ class CubismPhysicsJson {
      */
     public float getFps() {
         // If FPS information does not exist in physics3.json, 0.0f is returned.
-//        ACubismJsonValue cubismJsonValue = json.getRoot().get(JsonKey.META.key).get(JsonKey.FPS.key);
-//        return cubismJsonValue != null ? cubismJsonValue.toFloat() : 0.0f;
         return json.getRoot().get(JsonKey.META.key).get(JsonKey.FPS.key).toFloat(0.0f);
     }
 

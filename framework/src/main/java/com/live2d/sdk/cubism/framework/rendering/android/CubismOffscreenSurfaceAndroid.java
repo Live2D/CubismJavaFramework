@@ -7,7 +7,6 @@
 
 package com.live2d.sdk.cubism.framework.rendering.android;
 
-import android.opengl.GLES20;
 import com.live2d.sdk.cubism.framework.math.CubismVector2;
 
 import java.nio.IntBuffer;
@@ -139,17 +138,21 @@ public class CubismOffscreenSurfaceAndroid {
      * @param colorBuffer if non-zero, use colorBuffer as pixel storage area.
      */
     public void createOffscreenFrame(final int displayBufferWidth, final int displayBufferHeight, final int[] colorBuffer) {
-        CubismOffscreenSurfaceAndroid ret = new CubismOffscreenSurfaceAndroid();
-        ret.destroyOffscreenFrame();
+        // いったん削除
+        destroyOffscreenFrame();
 
-        int[] renderTexture = new int[1];
+        int[] ret = new int[1];
 
         // Create new offscreen surface
         if (colorBuffer == null) {
-            glGenTextures(1, IntBuffer.wrap(this.colorBuffer));
+            this.colorBuffer = new int[1];
+            glGenTextures(1, this.colorBuffer, 0);
+
             glBindTexture(GL_TEXTURE_2D, this.colorBuffer[0]);
-            glTexImage2D(GL_TEXTURE_2D,
-                0, GL_RGBA,
+            glTexImage2D(
+                GL_TEXTURE_2D,
+                0,
+                GL_RGBA,
                 displayBufferWidth,
                 displayBufferHeight,
                 0,
@@ -169,14 +172,18 @@ public class CubismOffscreenSurfaceAndroid {
             this.colorBuffer = colorBuffer;
             isColorBufferInherited = true;
         }
+
         int[] tmpFBO = new int[1];
-        glGetIntegerv(GL_FRAMEBUFFER_BINDING, IntBuffer.wrap(tmpFBO));
-        glGenFramebuffers(1, IntBuffer.wrap(renderTexture));
-        glBindFramebuffer(GL_FRAMEBUFFER, renderTexture[0]);
+
+        glGetIntegerv(GL_FRAMEBUFFER_BINDING, tmpFBO, 0);
+
+        glGenFramebuffers(1, ret, 0);
+        glBindFramebuffer(GL_FRAMEBUFFER, ret[0]);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.colorBuffer[0], 0);
         glBindFramebuffer(GL_FRAMEBUFFER, tmpFBO[0]);
 
-        this.renderTexture = renderTexture;
+        this.renderTexture = new int[1];
+        this.renderTexture[0] = ret[0];
         bufferWidth = displayBufferWidth;
         bufferHeight = displayBufferHeight;
     }
@@ -186,12 +193,12 @@ public class CubismOffscreenSurfaceAndroid {
      */
     public void destroyOffscreenFrame() {
         if (!isColorBufferInherited && (colorBuffer != null)) {
-            GLES20.glDeleteTextures(1, IntBuffer.wrap(colorBuffer));
+            glDeleteTextures(1, colorBuffer, 0);
             colorBuffer = null;
         }
 
         if (renderTexture != null) {
-            GLES20.glDeleteFramebuffers(1, IntBuffer.wrap(renderTexture));
+            glDeleteFramebuffers(1, renderTexture, 0);
             renderTexture = null;
         }
     }

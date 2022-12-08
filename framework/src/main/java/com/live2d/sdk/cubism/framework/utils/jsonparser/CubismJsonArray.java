@@ -25,21 +25,18 @@ class CubismJsonArray extends ACubismJsonValue {
 
     @Override
     public ACubismJsonValue get(String key) {
-//        return ERROR_VALUE.setErrorNotForClientCall(JsonError.TYPE_MISMATCH.message);
         return new CubismJsonErrorValue().setErrorNotForClientCall(JsonError.TYPE_MISMATCH.message);
     }
 
     @Override
     public ACubismJsonValue get(int index) {
         if (index < 0 || value.size() <= index) {
-//            return ERROR_VALUE.setErrorNotForClientCall(JsonError.INDEX_OUT_OF_BOUNDS.message);
             return new CubismJsonErrorValue().setErrorNotForClientCall(JsonError.INDEX_OUT_OF_BOUNDS.message);
         }
 
         ACubismJsonValue value = this.value.get(index);
 
         if (value == null) {
-//            return NULL_VALUE;
             return new CubismJsonNullValue();
         }
 

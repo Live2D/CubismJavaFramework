@@ -131,7 +131,7 @@ class CubismShaderAndroid {
             // channels
             final int channelNumber =
                 renderer.getClippingContextBufferForMask()
-                        .getLayoutChannelNo();
+                        .layoutChannelNo;
             CubismRenderer.CubismTextureColor colorChannel =
                 renderer.getClippingContextBufferForMask()
                         .getClippingManager()
@@ -148,13 +148,13 @@ class CubismShaderAndroid {
                 shaderSet.uniformClipMatrixLocation,
                 1,
                 false,
-                renderer.getClippingContextBufferForMask().getMatrixForMask().getArray(),
+                renderer.getClippingContextBufferForMask().matrixForMask.getArray(),
                 0
             );
 
             CubismRectangle rect =
                 renderer.getClippingContextBufferForMask()
-                        .getLayoutBounds();
+                        .layoutBounds;
 
             glUniform4f(
                 shaderSet.uniformBaseColorLocation,
@@ -259,7 +259,7 @@ class CubismShaderAndroid {
                 int tex =
                     renderer.getClippingContextBufferForDraw()
                             .getClippingManager()
-                            .getColorBuffer();
+                            .getColorBuffer()[renderer.getClippingContextBufferForDraw().bufferIndex];
                 glBindTexture(GL_TEXTURE_2D, tex);
                 glUniform1i(shaderSet.samplerTexture1Location, 1);
 
@@ -268,14 +268,14 @@ class CubismShaderAndroid {
                     shaderSet.uniformClipMatrixLocation,
                     1,
                     false,
-                    renderer.getClippingContextBufferForDraw().getMatrixForDraw().getArray(),
+                    renderer.getClippingContextBufferForDraw().matrixForDraw.getArray(),
                     0
                 );
 
                 // Set used color channel.
                 final int channelNumber =
                     renderer.getClippingContextBufferForDraw()
-                            .getLayoutChannelNo();
+                            .layoutChannelNo;
                 CubismRenderer.CubismTextureColor colorChannel =
                     renderer.getClippingContextBufferForDraw()
                             .getClippingManager()

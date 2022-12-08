@@ -118,27 +118,15 @@ public class CubismBreath {
      * Bind parameters of breath.
      *
      * @param breathParameters A parameters list bound breath
+     * @throws IllegalArgumentException if an argument is null
      */
     public void setParameters(List<BreathParameterData> breathParameters) {
+        if (breathParameters == null) {
+            throw new IllegalArgumentException("breathParameters is null.");
+        }
+
         this.breathParameters = breathParameters;
         areBreathParametersChanged = true;
-    }
-
-    /**
-     * Get the parameter bound breath at the specified index.
-     * <p>
-     * This method returns the copy of the breath parameter.
-     * </p>
-     *
-     * @param index parameter index
-     * @return BreathParameterData instance(Optional type)
-     */
-    public BreathParameterData getParameter(int index) {
-        if (index < 0 || index >= breathParameters.size()) {
-            return null;
-        }
-//        return new BreathParameterData(_breathParameters.get(index));
-        return breathParameters.get(index);
     }
 
     /**

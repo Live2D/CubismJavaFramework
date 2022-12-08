@@ -27,9 +27,11 @@ public abstract class ACubismMotion {
      * @param motionQueueEntry motion managed by CubismMotionQueueManager
      * @param userTimeSeconds total delta time[s]
      */
-    public void updateParameters(CubismModel model,
-                                 CubismMotionQueueEntry motionQueueEntry,
-                                 float userTimeSeconds) {
+    public void updateParameters(
+        CubismModel model,
+        CubismMotionQueueEntry motionQueueEntry,
+        float userTimeSeconds
+    ) {
         if (!motionQueueEntry.isAvailable() || motionQueueEntry.isFinished()) {
             return;
         }

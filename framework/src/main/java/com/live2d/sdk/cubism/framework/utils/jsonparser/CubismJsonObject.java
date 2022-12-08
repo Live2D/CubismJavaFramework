@@ -7,7 +7,10 @@
 
 package com.live2d.sdk.cubism.framework.utils.jsonparser;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * This class expresses JSON Object.
@@ -41,8 +44,6 @@ class CubismJsonObject extends ACubismJsonValue {
 
     @Override
     public ACubismJsonValue get(int index) {
-//        return ERROR_VALUE.setErrorNotForClientCall(JsonError.TYPE_MISMATCH.message);
-//        return value.get(keys.get(index));
         return new CubismJsonErrorValue().setErrorNotForClientCall(JsonError.TYPE_MISMATCH.message);
     }
 
@@ -106,7 +107,6 @@ class CubismJsonObject extends ACubismJsonValue {
 
     @Override
     public List<CubismJsonString> getKeys() {
-//        return value.keySet();
         return keys;
     }
 

@@ -155,13 +155,10 @@ class CubismPhysicsFunctions {
             CubismVector2 parentGravity
         ) {
             float outputValue;
-//            CubismVector2 tmpGravity = new CubismVector2(parentGravity);
             tmpGravity.x = parentGravity.x;
             tmpGravity.y = parentGravity.y;
 
             if (particleIndex >= 2) {
-//                CubismVector2 tmp = new CubismVector2(particles.get(baseParticleIndex + particleIndex - 1).position);
-//                _tmpGravity = tmp.subtract(particles.get(baseParticleIndex + particleIndex - 2).position);
                 tmpGravity.x = particles.get(baseParticleIndex + particleIndex - 1).position.x - particles.get(baseParticleIndex + particleIndex - 2).position.x;
                 tmpGravity.y = particles.get(baseParticleIndex + particleIndex - 1).position.y - particles.get(baseParticleIndex + particleIndex - 2).position.y;
 

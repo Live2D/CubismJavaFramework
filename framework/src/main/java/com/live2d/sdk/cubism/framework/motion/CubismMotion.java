@@ -95,7 +95,6 @@ public final class CubismMotion extends ACubismMotion {
      * @param parameterId parameter ID
      * @param value fade-in duration[s]
      */
-    // TODO: 最適化できそう
     public void setParameterFadeInTime(CubismId parameterId, float value) {
         for (int i = 0; i < motionData.curves.size(); i++) {
             CubismMotionCurve curve = motionData.curves.get(i);
@@ -113,7 +112,6 @@ public final class CubismMotion extends ACubismMotion {
      * @param parameterId parameter ID
      * @return fade-in duration[s]
      */
-    // TODO: 最適化できそう
     public float getParameterFadeInTime(CubismId parameterId) {
         for (int i = 0; i < motionData.curves.size(); i++) {
             CubismMotionCurve curve = motionData.curves.get(i);
@@ -131,7 +129,6 @@ public final class CubismMotion extends ACubismMotion {
      * @param parameterId parameter ID
      * @param value fade-out duration[s]
      */
-    // TODO: 最適化できそう
     public void setParameterFadeOutTime(CubismId parameterId, float value) {
         for (int i = 0; i < motionData.curves.size(); i++) {
             CubismMotionCurve curve = motionData.curves.get(i);
@@ -149,7 +146,6 @@ public final class CubismMotion extends ACubismMotion {
      * @param parameterId parameter ID
      * @return fade-out duration[s]
      */
-    // 最適化できそう
     public float getParameterFadeOutTime(CubismId parameterId) {
         for (int i = 0; i < motionData.curves.size(); i++) {
             CubismMotionCurve curve = motionData.curves.get(i);
@@ -331,10 +327,12 @@ public final class CubismMotion extends ACubismMotion {
      * @param motionQueueEntry motion managed by CubismMotionQueueManager
      */
     @Override
-    protected void doUpdateParameters(final CubismModel model,
-                                      final float userTimeSeconds,
-                                      final float fadeWeight,
-                                      final CubismMotionQueueEntry motionQueueEntry) {
+    protected void doUpdateParameters(
+        final CubismModel model,
+        final float userTimeSeconds,
+        final float fadeWeight,
+        final CubismMotionQueueEntry motionQueueEntry
+    ) {
         if (modelCurveIdEyeBlink == null) {
             modelCurveIdEyeBlink = CubismFramework.getIdManager().getId(EffectName.EYE_BLINK.name);
         }
@@ -613,7 +611,7 @@ public final class CubismMotion extends ACubismMotion {
         }
     }
 
-    private class LinearEvaluator implements csmMotionSegmentEvaluationFunction {
+    private class LinearEvaluator implements CsmMotionSegmentEvaluationFunction {
         @Override
         public float evaluate(float time, int basePointIndex) {
             CubismMotionPoint p0 = motionData.points.get(basePointIndex);
@@ -628,7 +626,7 @@ public final class CubismMotion extends ACubismMotion {
         }
     }
 
-    private class BezierEvaluator implements csmMotionSegmentEvaluationFunction {
+    private class BezierEvaluator implements CsmMotionSegmentEvaluationFunction {
         @Override
         public float evaluate(final float time, final int basePointIndex) {
             final CubismMotionPoint p0 = motionData.points.get(basePointIndex);
@@ -646,7 +644,7 @@ public final class CubismMotion extends ACubismMotion {
         }
     }
 
-    private class BezierEvaluatorCardanoInterpretation implements csmMotionSegmentEvaluationFunction {
+    private class BezierEvaluatorCardanoInterpretation implements CsmMotionSegmentEvaluationFunction {
         @Override
         public float evaluate(final float time, final int basePointIndex) {
             CubismMotionPoint p0 = motionData.points.get(basePointIndex);
@@ -670,14 +668,14 @@ public final class CubismMotion extends ACubismMotion {
         }
     }
 
-    private class SteppedEvaluator implements csmMotionSegmentEvaluationFunction {
+    private class SteppedEvaluator implements CsmMotionSegmentEvaluationFunction {
         @Override
         public float evaluate(float time, int basePointIndex) {
             return motionData.points.get(basePointIndex).value;
         }
     }
 
-    private class InverseSteppedEvaluator implements csmMotionSegmentEvaluationFunction {
+    private class InverseSteppedEvaluator implements CsmMotionSegmentEvaluationFunction {
         @Override
         public float evaluate(final float time, final int basePointIndex) {
             return motionData.points.get(basePointIndex + 1).value;

@@ -22,14 +22,17 @@ public class CubismDebug {
      * At using {@link CubismFramework#initialize()} function, if the log level is lower than set log output level, log output is not executed.
      *
      * @param logLevel log level setting
-     * @param message log string
+     * @param message format string
+     * @param args variadic arguments
      */
-    public static void print(final CubismFramework.Option.LogLevel logLevel, final String message) {
+    public static void print(final CubismFramework.Option.LogLevel logLevel, final String message, Object... args) {
         // If the log level is lower than set log output level in Option class, log outputting is not executed.
         if (logLevel.getId() < CubismFramework.getLoggingLevel().getId()) {
             return;
         }
-        CubismFramework.coreLogFunction(message);
+
+        String format = String.format(message, args);
+        CubismFramework.coreLogFunction(format);
     }
 
     /**
@@ -43,10 +46,12 @@ public class CubismDebug {
      */
     public static void dumpBytes(final CubismFramework.Option.LogLevel logLevel, final byte[] data, int length) {
         for (int i = 0; i < length; i++) {
-            byte b = data[i];
-            String hex = Integer.toHexString(b < 0 ? 256 + b : b);
-
-            print(logLevel, hex);
+            if (i % 16 == 0 && i > 0) {
+                print(logLevel, "\n");
+            } else if (i % 8 == 0 && i > 0) {
+                print(logLevel, " ");
+            }
+            print(logLevel, "%02X", (data[i] & 0xFF));
         }
     }
 
@@ -55,8 +60,8 @@ public class CubismDebug {
      *
      * @param message message
      */
-    public static void cubismLogPrint(CubismFramework.Option.LogLevel logLevel, String message) {
-        print(logLevel, "[CSM]" + message);
+    public static void cubismLogPrint(CubismFramework.Option.LogLevel logLevel, String message, Object... args) {
+        print(logLevel, "[CSM]" + message, args);
     }
 
     /**
@@ -64,8 +69,8 @@ public class CubismDebug {
      *
      * @param message message
      */
-    public static void cubismLogPrintln(CubismFramework.Option.LogLevel logLevel, String message) {
-        print(logLevel, "[CSM]" + message + "\n");
+    public static void cubismLogPrintln(CubismFramework.Option.LogLevel logLevel, String message, Object... args) {
+        cubismLogPrint(logLevel, message + "\n", args);
     }
 
     /**
@@ -73,9 +78,9 @@ public class CubismDebug {
      *
      * @param message message
      */
-    public static void cubismLogVerbose(String message) {
+    public static void cubismLogVerbose(String message, Object... args) {
         if (CSM_LOG_LEVEL.getId() <= CubismFramework.Option.LogLevel.VERBOSE.getId()) {
-            cubismLogPrintln(CubismFramework.Option.LogLevel.VERBOSE, "[V]" + message);
+            cubismLogPrintln(CubismFramework.Option.LogLevel.VERBOSE, "[V]" + message, args);
         }
     }
 
@@ -84,9 +89,9 @@ public class CubismDebug {
      *
      * @param message message
      */
-    public static void cubismLogDebug(String message) {
+    public static void cubismLogDebug(String message, Object... args) {
         if (CSM_LOG_LEVEL.getId() <= CubismFramework.Option.LogLevel.DEBUG.getId()) {
-            cubismLogPrintln(CubismFramework.Option.LogLevel.DEBUG, "[D]" + message);
+            cubismLogPrintln(CubismFramework.Option.LogLevel.DEBUG, "[D]" + message, args);
         }
     }
 
@@ -95,9 +100,9 @@ public class CubismDebug {
      *
      * @param message message
      */
-    public static void cubismLogInfo(String message) {
+    public static void cubismLogInfo(String message, Object... args) {
         if (CSM_LOG_LEVEL.getId() <= CubismFramework.Option.LogLevel.INFO.getId()) {
-            cubismLogPrintln(CubismFramework.Option.LogLevel.INFO, "[I]" + message);
+            cubismLogPrintln(CubismFramework.Option.LogLevel.INFO, "[I]" + message, args);
         }
     }
 
@@ -106,9 +111,9 @@ public class CubismDebug {
      *
      * @param message message
      */
-    public static void cubismLogWarning(String message) {
+    public static void cubismLogWarning(String message, Object... args) {
         if (CSM_LOG_LEVEL.getId() <= CubismFramework.Option.LogLevel.WARNING.getId()) {
-            cubismLogPrintln(CubismFramework.Option.LogLevel.WARNING, "[W]" + message);
+            cubismLogPrintln(CubismFramework.Option.LogLevel.WARNING, "[W]" + message, args);
         }
     }
 
@@ -117,9 +122,9 @@ public class CubismDebug {
      *
      * @param message message.
      */
-    public static void cubismLogError(String message) {
+    public static void cubismLogError(String message, Object... args) {
         if (CSM_LOG_LEVEL.getId() <= CubismFramework.Option.LogLevel.ERROR.getId()) {
-            cubismLogPrintln(CubismFramework.Option.LogLevel.ERROR, "[E]" + message);
+            cubismLogPrintln(CubismFramework.Option.LogLevel.ERROR, "[E]" + message, args);
         }
     }
 

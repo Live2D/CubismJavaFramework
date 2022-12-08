@@ -113,7 +113,6 @@ public class CubismPose {
         return pose;
     }
 
-
     /**
      * Update model's parameters.
      *
@@ -393,5 +392,4 @@ public class CubismPose {
      * Previous operated model
      */
     private CubismModel lastModel;
-
 }
