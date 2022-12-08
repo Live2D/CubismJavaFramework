@@ -51,7 +51,6 @@ public class CubismIdManager {
             return foundId;
         }
 
-//        _ids.add(id);
         CubismId cubismId = new CubismId(id);
         ids.add(cubismId);
 

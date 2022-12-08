@@ -7,7 +7,6 @@
 
 package com.live2d.sdk.cubism.framework;
 
-import com.live2d.sdk.cubism.framework.exception.CubismJsonParseException;
 import com.live2d.sdk.cubism.framework.id.CubismId;
 import com.live2d.sdk.cubism.framework.utils.jsonparser.ACubismJsonValue;
 import com.live2d.sdk.cubism.framework.utils.jsonparser.CubismJson;
@@ -22,7 +21,7 @@ import java.util.Map;
  * This class deals with model3.json data.
  */
 public class CubismModelSettingJson implements ICubismModelSetting {
-    public CubismModelSettingJson(byte[] buffer) throws CubismJsonParseException {
+    public CubismModelSettingJson(byte[] buffer) {
         CubismJson json;
         json = CubismJson.create(buffer);
 

@@ -25,6 +25,9 @@ public final class CubismExpressionMotion extends ACubismMotion {
      */
     public static class ExpressionParameter {
         public ExpressionParameter(CubismId id, ExpressionBlendType method, float value) {
+            if (id == null || method == null) {
+                throw new IllegalArgumentException("id or method is null.");
+            }
             this.parameterId = id;
             this.blendType = method;
             this.value = value;

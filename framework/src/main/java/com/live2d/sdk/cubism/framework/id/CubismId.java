@@ -15,8 +15,12 @@ public class CubismId {
      * Consturctor
      *
      * @param id A ID name
+     * @throws IllegalArgumentException if an argument is null
      */
     public CubismId(String id) {
+        if (id == null) {
+            throw new IllegalArgumentException("id is null.");
+        }
         this.id = id;
     }
 

@@ -255,7 +255,6 @@ public class CubismPhysics {
      * @param deltaTimeSeconds rendering delta time[s]
      */
     public void evaluate(CubismModel model, float deltaTimeSeconds) {
-//        float[] totalAngle = new float[1];
         float weight;
         float radAngle;
         float outputValue;
@@ -477,13 +476,11 @@ public class CubismPhysics {
         float totalRadian;
         float delay;
         float radian;
-        CubismVector2 currentGravity;
 
         strand.get(baseParticleIndex).position.set(totalTranslation.x, totalTranslation.y);
 
         totalRadian = CubismMath.degreesToRadian(totalAngle);
-        currentGravity = CubismMath.radianToDirection(totalRadian);
-        currentGravity.normalize();
+        CubismMath.radianToDirection(totalRadian, currentGravity).normalize();
 
         for (int i = 1; i < strandCount; i++) {
             final CubismPhysicsParticle currentParticle = strand.get(baseParticleIndex + i);
@@ -542,6 +539,7 @@ public class CubismPhysics {
     private static final CubismVector2 direction = new CubismVector2();
     private static final CubismVector2 velocity = new CubismVector2();
     private static final CubismVector2 force = new CubismVector2();
+    private static final CubismVector2 currentGravity = new CubismVector2();
 
     private static void updateParticlesForStabilization(
         List<CubismPhysicsParticle> strand,
@@ -554,37 +552,37 @@ public class CubismPhysics {
     ) {
         int i;
         float totalRadian;
-        CubismVector2 currentGravity;
-        CubismVector2 force = new CubismVector2();
 
         strand.get(baseParticleIndex).position.set(totalTranslation.x, totalTranslation.y);
 
         totalRadian = CubismMath.degreesToRadian(totalAngle);
-        currentGravity = CubismMath.radianToDirection(totalRadian);
-        currentGravity.normalize();
+        CubismMath.radianToDirection(totalRadian, currentGravityForStablization).normalize();
 
         for (i = 1; i < strandCount; i++) {
             CubismPhysicsParticle particle = strand.get(baseParticleIndex + i);
-            CubismVector2.multiply(currentGravity, particle.acceleration, particle.force).add(windDirection);
+            CubismVector2.multiply(currentGravityForStablization, particle.acceleration, particle.force).add(windDirection);
 
             particle.lastPosition.set(particle.position.x, particle.position.y);
-
             particle.velocity.setZero();
 
-            force.set(particle.force.x, particle.force.y);
-            force.normalize();
+            forceForStabilization.set(particle.force.x, particle.force.y);
+            forceForStabilization.normalize();
 
-            force.multiply(particle.radius);
-            CubismVector2.add(strand.get(baseParticleIndex + i - 1).position, force, particle.position);
+            forceForStabilization.multiply(particle.radius);
+            CubismVector2.add(strand.get(baseParticleIndex + i - 1).position, forceForStabilization, particle.position);
 
             if (CubismMath.absF(particle.position.x) < thresholdValue) {
                 particle.position.x = 0.0f;
             }
 
             particle.force.setZero();
-            particle.lastGravity = currentGravity;
+            particle.lastGravity.set(currentGravityForStablization.x, currentGravityForStablization.y);
         }
     }
+
+    // updateParticlesForStabilization関数内でのみ使われるキャッシュ変数
+    private static final CubismVector2 currentGravityForStablization = new CubismVector2();
+    private static final CubismVector2 forceForStabilization = new CubismVector2();
 
     private static void updateOutputParameterValue(
         float[] parameterValue,
@@ -667,7 +665,6 @@ public class CubismPhysics {
         options.gravity.set(0.0f, -1.0f);
         options.wind.setZero();
     }
-
 
     /**
      * Parse a physics3.json data.
@@ -1007,11 +1004,9 @@ public class CubismPhysics {
     /**
      * Cache of parameter used in 'Evaluate' method
      */
-//    List<Float> _parameterCache;
     private float[] parameterCaches = new float[1];
     /**
      * Cache of parameter input in 'UpdateParticles' method
      */
-//    List<Float> _parameterInputCache;
     private float[] parameterInputCaches = new float[1];
 }

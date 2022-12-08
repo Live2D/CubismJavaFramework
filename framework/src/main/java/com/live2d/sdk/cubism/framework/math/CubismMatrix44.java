@@ -32,7 +32,7 @@ public class CubismMatrix44 {
      *
      * @throws IllegalArgumentException if the argument is either {@code null} or it does not have a size of 16.
      */
-    public static CubismMatrix44 create(float[] matrix) throws IllegalArgumentException {
+    public static CubismMatrix44 create(float[] matrix) {
         if (isNot4x4Matrix(matrix)) {
             throw new IllegalArgumentException("The passed array is either 'null' or does not have a size of 16.");
         }
@@ -51,7 +51,7 @@ public class CubismMatrix44 {
      *
      * @throws IllegalArgumentException if the argument is either {@code null} or it does not have a size of 16.
      */
-    public static CubismMatrix44 create(CubismMatrix44 matrix) throws IllegalArgumentException {
+    public static CubismMatrix44 create(CubismMatrix44 matrix) {
         if (matrix == null) {
             throw new IllegalArgumentException("The passed CubismMatrix44 instance is 'null'");
         }
@@ -67,8 +67,8 @@ public class CubismMatrix44 {
      * @param dst the destination array
      * @throws IllegalArgumentException if the argument is either {@code null} or it does not have a size of 16.
      */
-    public static void multiply(float[] multiplicand, float[] multiplier, float[] dst) throws IllegalArgumentException {
-        if (isNot4x4Matrix(multiplicand)) {
+    public static void multiply(float[] multiplicand, float[] multiplier, float[] dst) {
+        if (isNot4x4Matrix(multiplicand) || isNot4x4Matrix(multiplier) || isNot4x4Matrix(dst)) {
             throw new IllegalArgumentException("The passed array is either 'null' or does not have a size of 16.");
         }
 

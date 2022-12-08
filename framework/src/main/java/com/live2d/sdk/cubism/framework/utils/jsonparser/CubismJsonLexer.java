@@ -8,7 +8,6 @@
 
 package com.live2d.sdk.cubism.framework.utils.jsonparser;
 
-import com.live2d.sdk.cubism.framework.exception.CubismException;
 import com.live2d.sdk.cubism.framework.exception.CubismJsonParseException;
 
 import java.io.IOException;
@@ -340,13 +339,7 @@ class CubismJsonLexer {
         // Read the next line when the character count reaches the end of the line.
         if (lineIndex == lineString.length() - 1) {
             String newLine;
-//            try {
-//                newLine = json.readLine();
-//            } catch (IOException e) {
-//                throw new CubismJsonParseException("It seems that an error has occured in the input/output processing", e);
-//            }
             newLine = json.readLine();
-
 
             if (newLine == null) {
                 lineString = null;
@@ -363,16 +356,10 @@ class CubismJsonLexer {
         }
     }
 
-
     /**
      * JSON string
      */
-//    private final String _rowJsonString;
     private final LineNumberReader json;
-    /**
-     * the length of the JSON string
-     */
-//    private final int _jsonLength;
 
     private int lineIndex = -1;
     private String lineString = "";
@@ -381,8 +368,4 @@ class CubismJsonLexer {
      * the next character
      */
     private char nextChar = ' ';
-    /**
-     * Current index of character in JSON string
-     */
-    private int charIndex;
 }

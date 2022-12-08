@@ -77,8 +77,7 @@ class CubismMotionInternal {
         /**
          * used evaluation function
          */
-//        public ToDoubleBiFunction<Float, Integer> evaluator;
-        public csmMotionSegmentEvaluationFunction evaluator;
+        public CsmMotionSegmentEvaluationFunction evaluator;
         /**
          * index to the first segment
          */
@@ -178,7 +177,7 @@ class CubismMotionInternal {
     /**
      * For strategy pattern.
      */
-    public interface csmMotionSegmentEvaluationFunction {
+    public interface CsmMotionSegmentEvaluationFunction {
         float evaluate(float time, int basePointIndex);
     }
 }

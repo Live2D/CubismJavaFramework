@@ -21,8 +21,13 @@ public class CubismModelMatrix extends CubismMatrix44 {
      * @param w width
      * @param h height
      * @return CubismModelMatrix instance with the width and height
+     *
+     * @throws IllegalArgumentException if arguments equals 0 or are less than 0
      */
     public static CubismModelMatrix create(float w, float h) {
+        if (w <= 0 || h <= 0) {
+            throw new IllegalArgumentException("width or height equals 0 or is less than 0.");
+        }
         return new CubismModelMatrix(w, h);
     }
 

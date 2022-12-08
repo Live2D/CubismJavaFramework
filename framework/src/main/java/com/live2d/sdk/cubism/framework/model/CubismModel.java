@@ -13,7 +13,10 @@ import com.live2d.sdk.cubism.framework.id.CubismId;
 import com.live2d.sdk.cubism.framework.rendering.CubismRenderer;
 import com.live2d.sdk.cubism.framework.rendering.CubismRenderer.CubismBlendMode;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import static com.live2d.sdk.cubism.core.CubismDrawableFlag.ConstantFlag.*;
 import static com.live2d.sdk.cubism.core.CubismDrawableFlag.DynamicFlag.*;
@@ -37,8 +40,12 @@ public class CubismModel {
          *
          * @param isOverwritten flag whether to be overwritten
          * @param color texture color
+         * @throws IllegalArgumentException if an argument is null
          */
         public DrawableColorData(boolean isOverwritten, CubismRenderer.CubismTextureColor color) {
+            if (color == null) {
+                throw new IllegalArgumentException("color is null");
+            }
             this.isOverwritten = isOverwritten;
             this.color = color;
         }
@@ -61,6 +68,36 @@ public class CubismModel {
          * texture color
          */
         public CubismRenderer.CubismTextureColor color;
+    }
+
+    /**
+     * テクスチャのカリング設定を管理するための内部クラス
+     */
+    public static class DrawableCullingData {
+        /**
+         * コンストラクタ
+         */
+        DrawableCullingData() {}
+
+        /**
+         * コンストラクタ
+         *
+         * @param isOverWritten モデルのカリング設定を上書きするかどうか
+         * @param isCulling カリングするかどうか
+         */
+        DrawableCullingData(boolean isOverWritten, boolean isCulling) {
+            this.isOverWritten = isOverWritten;
+            this.isCulling = isCulling;
+        }
+
+        /**
+         * モデルのカリング設定を上書きするかどうか
+         */
+        public boolean isOverWritten;
+        /**
+         * カリングするかどうか
+         */
+        public boolean isCulling;
     }
 
     /**
@@ -164,7 +201,6 @@ public class CubismModel {
         final int partCount = partValues.length;
         final int partIndex = partCount + notExistPartIds.size();
         notExistPartIds.put(partId, partIndex);
-//        _notExistPartOpacities.put(partIndex, 0.0f);
         notExistPartIndices.add(partIndex);
 
         float[] tmp = new float[notExistPartIndices.size()];
@@ -210,10 +246,6 @@ public class CubismModel {
      * @param opacity part opacity
      */
     public void setPartOpacity(int partIndex, float opacity) {
-//        if (_notExistPartOpacities.containsKey(partIndex)) {
-//            _notExistPartOpacities.put(partIndex, opacity);
-//            return;
-//        }
         if (notExistPartIndices.contains(partIndex)) {
             int index = notExistPartIndices.indexOf(partIndex);
             notExistPartOpacities[index] = opacity;
@@ -699,17 +731,6 @@ public class CubismModel {
     }
 
     /**
-     * Get the culling inforamtion of Drawable.
-     *
-     * @param drawableIndex Drawable index
-     * @return the culling inforamtion of Drawable
-     */
-    public boolean getDrawableCulling(int drawableIndex) {
-        final byte constantFlag = model.getDrawableViews()[drawableIndex].getConstantFlag();
-        return !isBitSet(constantFlag, IS_DOUBLE_SIDED);
-    }
-
-    /**
      * Get the blend mode of Drawable.
      *
      * @param drawableIndex Drawable index
@@ -1075,6 +1096,69 @@ public class CubismModel {
     }
 
     /**
+     * Get the culling inforamtion of Drawable.
+     *
+     * @param drawableIndex Drawable index
+     * @return the culling inforamtion of Drawable
+     */
+    public boolean getDrawableCulling(int drawableIndex) {
+        if (getOverwriteFlagForModelCullings() || getOverwriteFlagForDrawableCullings(drawableIndex)) {
+            return userCullings.get(drawableIndex).isCulling;
+        }
+
+        final byte constantFlag = model.getDrawableViews()[drawableIndex].getConstantFlag();
+        return !isBitSet(constantFlag, IS_DOUBLE_SIDED);
+    }
+
+    /**
+     * Drawableのカリング情報を設定する
+     *
+     * @param drawableIndex drawableのインデックス
+     * @param isCulling カリングするかどうか
+     */
+    public void setDrawableCulling(int drawableIndex, boolean isCulling) {
+        userCullings.get(drawableIndex).isCulling = isCulling;
+    }
+
+    /**
+     * SDKからモデル全体のカリング設定を上書きするか
+     *
+     * @return trueならSDK上のカリング設定を使用し、falseならモデルのカリング設定を使用する
+     */
+    public boolean getOverwriteFlagForModelCullings() {
+        return isOverwrittenCullings;
+    }
+
+    /**
+     * SDK上からモデル全体のカリング設定を上書きするかをセットする
+     *
+     * @param value SDK上のカリング設定を使うならtrue, モデルのカリング設定を使うならfalse
+     */
+    public void setOverwriteFlagForModelCullings(boolean value) {
+        isOverwrittenCullings = value;
+    }
+
+    /**
+     * SDKからdrawableのカリング設定を上書きするか
+     *
+     * @param drawableIndex drawableのインデックス
+     * @return trueならSDK上のカリング設定を使用し、falseならモデルのカリング設定を使用する
+     */
+    public boolean getOverwriteFlagForDrawableCullings(int drawableIndex) {
+        return userCullings.get(drawableIndex).isOverWritten;
+    }
+
+    /**
+     * SDKからdrawableのカリング設定を上書きするかをセットする
+     *
+     * @param drawableIndex drawableのインデックス
+     * @param value SDK上のカリング設定を使うならtrue, モデルのカリング設定を使うならfalse
+     */
+    public void setOverwriteFlagForDrawableCullings(int drawableIndex, boolean value) {
+        userCullings.get(drawableIndex).isOverWritten = value;
+    }
+
+    /**
      * Get the model.
      *
      * @return model
@@ -1142,6 +1226,7 @@ public class CubismModel {
             drawableIds.add(CubismFramework.getIdManager().getId(id));
             userMultiplyColors.add(new DrawableColorData(userMultiplyColor));
             userScreenColors.add(new DrawableColorData(userScreenColor));
+            userCullings.add(new DrawableCullingData(false, false));
         }
     }
 
@@ -1208,6 +1293,10 @@ public class CubismModel {
      */
     private List<DrawableColorData> userScreenColors = new ArrayList<DrawableColorData>();
     /**
+     * カリング設定のリスト
+     */
+    private final List<DrawableCullingData> userCullings = new ArrayList<DrawableCullingData>();
+    /**
      * Flag whether to overwrite all the multiply colors
      */
     private boolean isOverwrittenModelMultiplyColors;
@@ -1215,4 +1304,8 @@ public class CubismModel {
      * Flag whether to overwrite all the screen colors
      */
     private boolean isOverwrittenModelScreenColors;
+    /**
+     * モデルのカリング設定をすべて上書きするか？
+     */
+    private boolean isOverwrittenCullings;
 }

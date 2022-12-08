@@ -45,7 +45,6 @@ class CubismPhysicsInternal {
         ANGLE
     }
 
-
     /**
      * External forces used in physics operations.
      */
@@ -333,7 +332,6 @@ class CubismPhysicsInternal {
     /**
      * Functional interface with a function for getting values of physics operations.
      */
-//    @FunctionalInterface
     public interface PhysicsValueGetter {
         /**
          * Get values of physics operations.

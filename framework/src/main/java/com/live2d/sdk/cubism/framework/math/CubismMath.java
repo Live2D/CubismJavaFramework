@@ -152,16 +152,15 @@ public class CubismMath {
      * Convert a radian value to a direction vector.
      *
      * @param totalAngle radian value
+     * @param result CubismVector2 instance for storing calculation results
      * @return direction vector calculated from radian value
      */
-    public static CubismVector2 radianToDirection(float totalAngle) {
-        direction.x = sinF(totalAngle);
-        direction.y = cosF(totalAngle);
+    public static CubismVector2 radianToDirection(float totalAngle, CubismVector2 result) {
+        result.x = sinF(totalAngle);
+        result.y = cosF(totalAngle);
 
-        return direction;
+        return result;
     }
-
-    private static final CubismVector2 direction = new CubismVector2();
 
     /**
      * Calculate the solution to the quadratic equation.

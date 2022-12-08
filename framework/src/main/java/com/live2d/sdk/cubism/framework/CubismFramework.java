@@ -75,6 +75,9 @@ public class CubismFramework {
          * @param logger log output function
          */
         public void setLogFunction(ICubismLogger logger) {
+            if (logger == null) {
+                throw new IllegalArgumentException("logger is null.");
+            }
             logFunction = logger;
         }
 

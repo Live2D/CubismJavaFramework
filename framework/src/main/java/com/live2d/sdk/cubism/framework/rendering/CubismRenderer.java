@@ -110,6 +110,15 @@ public abstract class CubismRenderer {
         this.model = model;
     }
 
+    /**
+     * レンダラーの初期化処理を実行する。<br>
+     * マスクバッファを2つ以上作成する場合はこのメソッドを使用する。第2引数に何も入れない場合のデフォルト値は1となる。
+     *
+     * @param model モデルのインスタンス
+     * @param maskBufferCount バッファの生成数
+     */
+    abstract public void initialize(CubismModel model, int maskBufferCount);
+
     public void close() {
         model.close();
     }

@@ -7,7 +7,6 @@
 
 package com.live2d.sdk.cubism.framework.rendering.android;
 
-import android.opengl.GLES20;
 import com.live2d.sdk.cubism.framework.math.CubismMatrix44;
 import com.live2d.sdk.cubism.framework.math.CubismRectangle;
 import com.live2d.sdk.cubism.framework.math.CubismVector2;
@@ -15,11 +14,12 @@ import com.live2d.sdk.cubism.framework.model.CubismModel;
 import com.live2d.sdk.cubism.framework.rendering.CubismRenderer;
 
 import java.io.Closeable;
-import java.nio.*;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.FloatBuffer;
+import java.nio.ShortBuffer;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import static android.opengl.GLES20.*;
 import static com.live2d.sdk.cubism.framework.CubismFramework.VERTEX_OFFSET;
@@ -72,18 +72,28 @@ class CubismClippingManagerAndroid implements Closeable {
         clippingContextListForDraw.clear();
 
         if (maskTexture != null) {
-            int[] texture = {maskTexture.texture};
-            glDeleteFramebuffers(1, IntBuffer.wrap(texture));
+            for (int i = 0; i < maskTexture.textures.length; i++) {
+                glDeleteFramebuffers(1, maskTexture.textures, i);
+            }
             maskTexture = null;
         }
 
-        GLES20.glDeleteTextures(1, IntBuffer.wrap(colorBuffer));
+        if (maskColorBuffers != null) {
+            for (int i = 0; i < maskColorBuffers.length; i++) {
+                glDeleteTextures(1, maskColorBuffers, i);
+            }
+            maskColorBuffers = null;
+        }
+
+        if (maskRenderTextures != null) {
+            maskRenderTextures = null;
+        }
 
         channelColors.clear();
 
-        vertexArrayMap = null;
-        uvArrayMap = null;
-        indexArrayMap = null;
+        vertexArrayCache = null;
+        uvArrayCache = null;
+        indexArrayCache = null;
     }
 
     /**
@@ -92,13 +102,19 @@ class CubismClippingManagerAndroid implements Closeable {
      *
      * @param drawableCount number of drawing objects
      * @param drawableMasks list of drawing object indices to mask drawing objects
-     * @param drawableMaskCounts number of drawing objects to mask drawing objects.
+     * @param drawableMaskCounts number of drawing objects to mask drawing objects
+     * @param maskBufferCount number of mask buffers
      */
     public void initialize(
         int drawableCount,
         final int[][] drawableMasks,
-        final int[] drawableMaskCounts
+        final int[] drawableMaskCounts,
+        final int maskBufferCount
     ) {
+        // レンダーテクスチャの合計枚数の設定（整数でない場合小数点以下を除去）
+        // 負の値が使われている場合は強制的に1枚と設定する
+        this.renderTextureCount = maskBufferCount > 0 ? maskBufferCount : 1;
+
         // Register all drawing objects that use clipping masks.
         // The use of clipping masks is usually limited to a few objects.
         for (int i = 0; i < drawableCount; i++) {
@@ -130,63 +146,55 @@ class CubismClippingManagerAndroid implements Closeable {
         currentFrameNumber++;
 
         // FloatBufferのリストが空なら全Drawableの頂点とUV頂点のFloatBufferを作成して格納する
-        // マップサイズ算出
-        int mapSize = 0;
-        for (int i = 0; i < clippingContextListForMask.size(); i++) {
-            CubismClippingContext clippingContext = clippingContextListForMask.get(i);
-
-            final int clipDrawCount = clippingContext.getClippingIdCount();
-            mapSize += clipDrawCount;
-        }
-
-        if (vertexArrayMap == null) {
-            vertexArrayMap = new HashMap<Integer, FloatBuffer>(mapSize, 1);
+        final int drawableCount = model.getDrawableCount();
+        if (vertexArrayCache == null) {
+            vertexArrayCache = new FloatBuffer[drawableCount];
             for (int j = 0; j < clippingContextListForMask.size(); j++) {
                 CubismClippingContext clipContext = clippingContextListForMask.get(j);
 
-                final int clipDrawCount = clipContext.getClippingIdCount();
+                final int clipDrawCount = clipContext.clippingIdCount;
                 for (int i = 0; i < clipDrawCount; i++) {
-                    final int clipDrawIndex = clipContext.getClippingIdList()[i];
+                    final int clipDrawIndex = clipContext.clippingIdList[i];
                     float[] vertexArray = model.getDrawableVertices(clipDrawIndex);
 
                     ByteBuffer bb = ByteBuffer.allocateDirect(vertexArray.length * 4);
                     bb.order(ByteOrder.nativeOrder());
                     FloatBuffer vertexArrayBuffer = bb.asFloatBuffer();
-                    vertexArrayMap.put(clipDrawIndex, vertexArrayBuffer);
+                    vertexArrayCache[clipDrawIndex] = vertexArrayBuffer;
                 }
             }
         }
-        if (uvArrayMap == null) {
-            uvArrayMap = new HashMap<Integer, FloatBuffer>(mapSize, 1);
+        if (uvArrayCache == null) {
+            uvArrayCache = new FloatBuffer[drawableCount];
             for (int j = 0; j < clippingContextListForMask.size(); j++) {
                 CubismClippingContext clipContext = clippingContextListForMask.get(j);
 
-                final int clipDrawCount = clipContext.getClippingIdCount();
+                final int clipDrawCount = clipContext.clippingIdCount;
                 for (int i = 0; i < clipDrawCount; i++) {
-                    final int clipDrawIndex = clipContext.getClippingIdList()[i];
+                    final int clipDrawIndex = clipContext.clippingIdList[i];
                     float[] uvArray = model.getDrawableVertexUvs(clipDrawIndex);
 
                     ByteBuffer bb = ByteBuffer.allocateDirect(uvArray.length * 4);
                     bb.order(ByteOrder.nativeOrder());
                     FloatBuffer uvArrayBuffer = bb.asFloatBuffer();
-                    uvArrayMap.put(clipDrawIndex, uvArrayBuffer);
+                    uvArrayCache[clipDrawIndex] = uvArrayBuffer;
                 }
             }
         }
-        if (indexArrayMap == null) {
-            indexArrayMap = new HashMap<Integer, ShortBuffer>(mapSize, 1);
+        if (indexArrayCache == null) {
+            indexArrayCache = new ShortBuffer[drawableCount];
             for (int j = 0; j < clippingContextListForMask.size(); j++) {
                 CubismClippingContext clipContext = clippingContextListForMask.get(j);
 
-                final int clipDrawCount = clipContext.getClippingIdCount();
+                final int clipDrawCount = clipContext.clippingIdCount;
                 for (int i = 0; i < clipDrawCount; i++) {
-                    final int clipDrawIndex = clipContext.getClippingIdList()[i];
+                    final int clipDrawIndex = clipContext.clippingIdList[i];
                     short[] indexArray = model.getDrawableVertexIndices(clipDrawIndex);
 
                     ByteBuffer bb = ByteBuffer.allocateDirect(indexArray.length * 4);
                     bb.order(ByteOrder.nativeOrder());
                     ShortBuffer indexArrayBuffer = bb.asShortBuffer();
-                    indexArrayMap.put(clipDrawIndex, indexArrayBuffer);
+                    indexArrayCache[clipDrawIndex] = indexArrayBuffer;
                 }
             }
         }
@@ -200,7 +208,7 @@ class CubismClippingManagerAndroid implements Closeable {
             // Calculate the rectangle that encloses the entire group of drawing objects that use this clip.
             calcClippedDrawTotalBounds(model, clipContext);
 
-            if (clipContext.isUsing()) {
+            if (clipContext.isUsing) {
                 // Count as in use.
                 usingClipCount++;
             }
@@ -210,94 +218,117 @@ class CubismClippingManagerAndroid implements Closeable {
             return;
         }
 
-        // TODO: 高精細マスクに対応
-//        if (!renderer.isUsingHighPrecisionMask()) {
-//            // 生成したFrameBufferと同じサイズでビューポートを設定
-//            glViewport(0, 0, (int) _clippingMaskBufferSize.x, (int) _clippingMaskBufferSize.y);
-//
-//            // モデル描画時にDrawMeshNowに渡される変換 (モデルtoワールド座標変換)
-//            CubismMatrix4x4 modelToWorldF = renderer.getMvpMatrix();
-//
-//            // バッファをクリアする
-//            renderer.preDraw();
-//
-//            // _offscreenFrameBufferへ切り替え
-//            renderer._offscreenFrameBuffer.beginDraw(lastFBO);
-//
-//            // マスクをクリアする
-//            // 1が無効(描画されない)領域、0が有効(描画される)領域。(シェーダーでCd*Csで0に近い値をかけてマスクを作る。1をかけると何も起こらない。)
-//            renderer._offscreenFrameBuffer.clear(1.0f, 1.0f, 1.0f, 1.0f);
-//        }
-
         // Process of creating mask.
-        // Save the current value of viewport.
-//        int[] viewport = new int[4];
-        for (int i = 0; i < 4; i++) {
-            viewport[i] = 0;
+        if (!renderer.isUsingHighPrecisionMask()) {
+            // Set up a viewport with the same size as the generated FrameBuffer.
+            glViewport(0, 0, (int) clippingMaskBufferSize.x, (int) clippingMaskBufferSize.y);
+
+            for (int renderTextureIndex = 0; renderTextureIndex < renderTextureCount; renderTextureIndex++) {
+                // マスクをアクティブにする
+                currentMaskRenderTexture = getMaskRenderTexture()[renderTextureIndex];
+                // バッファをクリアする
+                renderer.preDraw();
+
+                // ----- マスク描画処理 -----
+                // マスク用RenderTextureをactiveにセット
+                glBindFramebuffer(GL_FRAMEBUFFER, currentMaskRenderTexture);
+
+                // Clear the mask.
+                // (temporary spec) 1 is invalid (not drawn), 0 is valid (drawn).
+                // (In the shader, in Cd*Cs multiply by a value close to 0 to create a mask; multiply by 1 and nothing happens)
+                glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+                glClear(GL_COLOR_BUFFER_BIT);
+
+                // offscreenFrameBufferへ切り替え
+                renderer.offscreenFrameBuffers[renderTextureIndex].beginDraw(lastFBO);
+
+                // Clear the mask.
+                // (temporary spec) 1 is invalid (not drawn), 0 is valid (drawn).
+                // (In the shader, in Cd*Cs multiply by a value close to 0 to create a mask; multiply by 1 and nothing happens)
+                renderer.offscreenFrameBuffers[renderTextureIndex].clear(1.0f, 1.0f, 1.0f, 1.0f);
+            }
+
+            // 後の計算のためにインデックスの最初をセットし直す。
+            currentMaskRenderTexture = getMaskRenderTexture()[0];
+
+            // Clear the buffer.
+            renderer.preDraw();
+
+            // ----- マスク描画処理 -----
+            // マスク用RenderTextureをactiveにセット
+            glBindFramebuffer(GL_FRAMEBUFFER, currentMaskRenderTexture);
         }
 
-        glGetIntegerv(GL_VIEWPORT, viewport, 0);
-
-        // Set up a viewport with the same size as the generated FrameBuffer.
-        glViewport(0, 0, (int) clippingMaskBufferSize.x, (int) clippingMaskBufferSize.y);
-
-        // Save the FBO before switching to mask active
-        oldFBO[0] = 0;
-
-        glGetIntegerv(GL_FRAMEBUFFER_BINDING, oldFBO, 0);
-
-        // Set mask to active.
-        final int maskRenderTexture = getMaskRenderTexture();
-
-        // モデル描画時にDrawMeshNowに渡される変換（モデルtoワールド座標変換）
-//        CubismMatrix44 modelToWorldF = renderer.getMvpMatrix();
-
-        // Clear the buffer.
-        renderer.preDraw();
-
         // Determine the layout of each mask.
-        setupLayoutBounds(usingClipCount);
+        setupLayoutBounds(renderer.isUsingHighPrecisionMask() ? 0 : usingClipCount);
 
         // ---------- Mask Drawing Process -----------
-        // Set the RenderTexture for the mask to active.
-        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, maskRenderTexture);
-
-        // Clear the mask.
-        // (temporary spec) 1 is invalid (not drawn), 0 is valid (drawn).
-        // (In the shader, in Cd*Cs multiply by a value close to 0 to create a mask; multiply by 1 and nothing happens)
-        GLES20.glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
-
         // Actually generate the masks.
         // Determine how to layout and draw all the masks, and store them in ClipContext and ClippedDrawContext.
         for (int j = 0; j < clippingContextListForMask.size(); j++) {
             CubismClippingContext clipContext = clippingContextListForMask.get(j);
 
             // The enclosing rectangle in logical coordinates of all drawing objects that use this mask.
-            CubismRectangle allClippedDrawRect = clipContext.getAllClippedDrawRect();
+            CubismRectangle allClippedDrawRect = clipContext.allClippedDrawRect;
             // Fit the mask in here.
-            CubismRectangle layoutBoundsOnTex01 = clipContext.getLayoutBounds();
+            CubismRectangle layoutBoundsOnTex01 = clipContext.layoutBounds;
 
-            // Use a rectangle on the model coordinates with margins as appropriate.
-//            CubismRectangle _tmpBoundsOnModel = CubismRectangle.create(allClippedDrawRect);
-            tmpBoundsOnModel.setX(allClippedDrawRect.getX());
-            tmpBoundsOnModel.setY(allClippedDrawRect.getY());
-            tmpBoundsOnModel.setWidth(allClippedDrawRect.getWidth());
-            tmpBoundsOnModel.setHeight(allClippedDrawRect.getHeight());
-
-
+            float scaleX, scaleY;
             final float margin = 0.05f;
-//            tmpBoundsOnModel.setRect(allClippedDrawRect);
-            tmpBoundsOnModel.expand(
-                allClippedDrawRect.getWidth() * margin,
-                allClippedDrawRect.getHeight() * margin
-            );
 
-            // ######## It is best to keep the size to a minimum, rather than using the entire allocated space.
-            // Find the formula for the shader. If rotation is not taken into account, the formula is as follows.
-            // movePeriod' = movePeriod * scaleX + offX     [[ movePeriod' = (movePeriod - tmpBoundsOnModel.movePeriod)*scale + layoutBoundsOnTex01.movePeriod ]]
-            final float scaleX = layoutBoundsOnTex01.getWidth() / tmpBoundsOnModel.getWidth();
-            final float scaleY = layoutBoundsOnTex01.getHeight() / tmpBoundsOnModel.getHeight();
+            // clipContextに設定したレンダーテクスチャをインデックスで取得
+            final int clipContextRenderTexture = getMaskRenderTexture()[clipContext.bufferIndex];
+
+            // 現在のレンダーテクスチャがclipContextのものと異なる場合
+            if (currentMaskRenderTexture != clipContextRenderTexture &&
+                !renderer.isUsingHighPrecisionMask()
+            ) {
+                currentMaskRenderTexture = clipContextRenderTexture;
+                // バッファをクリアする。
+                renderer.preDraw();
+
+                // マスク用RenderTextureをactiveにセット
+                glBindFramebuffer(GL_FRAMEBUFFER, currentMaskRenderTexture);
+            }
+
+            if (renderer.isUsingHighPrecisionMask()) {
+                final float ppu = model.getPixelPerUnit();
+                final float maskPixelWidth = clipContext.getClippingManager().clippingMaskBufferSize.x;
+                final float maskPixelHeight = clipContext.getClippingManager().clippingMaskBufferSize.y;
+                final float physicalMaskWidth = layoutBoundsOnTex01.getWidth() * maskPixelWidth;
+                final float physicalMaskHeight = layoutBoundsOnTex01.getHeight() * maskPixelHeight;
+
+                tmpBoundsOnModel.setRect(allClippedDrawRect);
+
+                if (tmpBoundsOnModel.getWidth() * ppu > physicalMaskWidth) {
+                    tmpBoundsOnModel.expand(allClippedDrawRect.getWidth() * margin, 0.0f);
+                    scaleX = layoutBoundsOnTex01.getWidth() / tmpBoundsOnModel.getWidth();
+                } else {
+                    scaleX = ppu / physicalMaskWidth;
+                }
+
+                if (tmpBoundsOnModel.getHeight() * ppu > physicalMaskHeight) {
+                    tmpBoundsOnModel.expand(0.0f, allClippedDrawRect.getHeight() * margin);
+                    scaleY = layoutBoundsOnTex01.getHeight() / tmpBoundsOnModel.getHeight();
+                } else {
+                    scaleY = ppu / physicalMaskHeight;
+                }
+            } else {
+                // Use a rectangle on the model coordinates with margins as appropriate.
+                tmpBoundsOnModel.setRect(allClippedDrawRect);
+
+                tmpBoundsOnModel.expand(
+                    allClippedDrawRect.getWidth() * margin,
+                    allClippedDrawRect.getHeight() * margin
+                );
+
+                // ######## It is best to keep the size to a minimum, rather than using the entire allocated space.
+                // Find the formula for the shader. If rotation is not taken into account, the formula is as follows.
+                // movePeriod' = movePeriod * scaleX + offX     [[ movePeriod' = (movePeriod - tmpBoundsOnModel.movePeriod)*scale + layoutBoundsOnTex01.movePeriod ]]
+                scaleX = layoutBoundsOnTex01.getWidth() / tmpBoundsOnModel.getWidth();
+                scaleY = layoutBoundsOnTex01.getHeight() / tmpBoundsOnModel.getHeight();
+
+            }
 
             // Calculate the matrix to be used for mask generation.
             tmpMatrix.loadIdentity();
@@ -316,7 +347,8 @@ class CubismClippingManagerAndroid implements Closeable {
                 -tmpBoundsOnModel.getX(),
                 -tmpBoundsOnModel.getY()
             );
-            clipContext.getMatrixForMask().setMatrix(tmpMatrix);
+            // tmpMatrixForMaskが計算結果
+            tmpMatrixForMask.setMatrix(tmpMatrix);
 
             // Calculate the mask reference matrix for draw.
             // Find the matrix to pass to the shader <<< optimization required (can be simplified by calculating in reverse order)
@@ -330,69 +362,78 @@ class CubismClippingManagerAndroid implements Closeable {
                 -tmpBoundsOnModel.getX(),
                 -tmpBoundsOnModel.getY()
             );
-            clipContext.getMatrixForDraw().setMatrix(tmpMatrix);
+            tmpMatrixForDraw.setMatrix(tmpMatrix);
 
-            final int clipDrawCount = clipContext.getClippingIdCount();
-            for (int i = 0; i < clipDrawCount; i++) {
-                final int clipDrawIndex = clipContext.getClippingIdList()[i];
+            clipContext.matrixForMask.setMatrix(tmpMatrixForMask);
+            clipContext.matrixForDraw.setMatrix(tmpMatrixForDraw);
 
-                // If vertex information is not updated and reliable, pass drawing.
-                if (!model.getDrawableDynamicFlagVertexPositionsDidChange(clipDrawIndex)) {
-                    continue;
+            if (!renderer.isUsingHighPrecisionMask()) {
+                final int clipDrawCount = clipContext.clippingIdCount;
+
+                for (int i = 0; i < clipDrawCount; i++) {
+                    final int clipDrawIndex = clipContext.clippingIdList[i];
+
+                    // If vertex information is not updated and reliable, pass drawing.
+                    if (!model.getDrawableDynamicFlagVertexPositionsDidChange(clipDrawIndex)) {
+                        continue;
+                    }
+
+                    renderer.isCulling(model.getDrawableCulling(clipDrawIndex));
+
+                    // Apply this special transformation to draw it.
+                    // Switching channel is also needed.(A,R,G,B)
+                    renderer.setClippingContextBufferForMask(clipContext);
+
+                    FloatBuffer vertexArrayBuffer = vertexArrayCache[clipDrawIndex];
+                    vertexArrayBuffer.clear();
+                    vertexArrayBuffer.put(model.getDrawableVertices(clipDrawIndex));
+                    vertexArrayBuffer.position(0);
+
+                    FloatBuffer uvArrayBuffer = uvArrayCache[clipDrawIndex];
+                    uvArrayBuffer.clear();
+                    uvArrayBuffer.put(model.getDrawableVertexUvs(clipDrawIndex));
+                    uvArrayBuffer.position(0);
+
+                    ShortBuffer indexArrayBuffer = indexArrayCache[clipDrawIndex];
+                    indexArrayBuffer.clear();
+                    indexArrayBuffer.put(model.getDrawableVertexIndices(clipDrawIndex));
+                    indexArrayBuffer.position(0);
+
+                    renderer.drawMeshAndroid(
+                        model.getDrawableTextureIndex(clipDrawIndex),
+                        model.getDrawableVertexIndexCount(clipDrawIndex),
+                        model.getDrawableVertexCount(clipDrawIndex),
+                        indexArrayBuffer,
+                        vertexArrayBuffer,
+                        uvArrayBuffer,
+                        model.getMultiplyColor(clipDrawIndex),
+                        model.getScreenColor(clipDrawIndex),
+                        model.getDrawableOpacity(clipDrawIndex),
+                        CubismRenderer.CubismBlendMode.NORMAL,  // Clipping is forced normal drawing.
+                        false   // The inverted use of clipping is completely irrelevant when generating masks.
+                    );
                 }
-
-                renderer.isCulling(model.getDrawableCulling(clipDrawIndex));
-
-                // Apply this special transformation to draw it.
-                // Switching channel is also needed.(A,R,G,B)
-                renderer.setClippingContextBufferForMask(clipContext);
-
-                FloatBuffer vertexArrayBuffer = vertexArrayMap.get(clipDrawIndex);
-                vertexArrayBuffer.clear();
-                vertexArrayBuffer.put(model.getDrawableVertices(clipDrawIndex));
-                vertexArrayBuffer.position(0);
-
-                FloatBuffer uvArrayBuffer = uvArrayMap.get(clipDrawIndex);
-                uvArrayBuffer.clear();
-                uvArrayBuffer.put(model.getDrawableVertexUvs(clipDrawIndex));
-                uvArrayBuffer.position(0);
-
-                ShortBuffer indexArrayBuffer = indexArrayMap.get(clipDrawIndex);
-                indexArrayBuffer.clear();
-                indexArrayBuffer.put(model.getDrawableVertexIndices(clipDrawIndex));
-                indexArrayBuffer.position(0);
-
-                renderer.drawMeshAndroid(
-                    model.getDrawableTextureIndex(clipDrawIndex),
-                    model.getDrawableVertexIndexCount(clipDrawIndex),
-                    model.getDrawableVertexCount(clipDrawIndex),
-                    indexArrayBuffer,
-                    vertexArrayBuffer,
-                    uvArrayBuffer,
-                    model.getMultiplyColor(clipDrawIndex),
-                    model.getScreenColor(clipDrawIndex),
-                    model.getDrawableOpacity(clipDrawIndex),
-                    CubismRenderer.CubismBlendMode.NORMAL,  // Clipping is forced normal drawing.
-                    false   // The inverted use of clipping is completely irrelevant when generating masks.
-                );
             }
         }
 
-        // --- Post Processing ---
-        // Return the drawing target
-        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, oldFBO[0]);
-        renderer.setClippingContextBufferForMask(null);
+        if (!renderer.isUsingHighPrecisionMask()) {
+            // --- Post Processing ---
+            // Return the drawing target
+            for (int i = 0; i < renderTextureCount; i++)
+                renderer.offscreenFrameBuffers[i].endDraw();
+            renderer.setClippingContextBufferForMask(null);
 
-        glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+            glViewport(lastViewport[0], lastViewport[1], lastViewport[2], lastViewport[3]);
+        }
     }
 
-    private final int[] viewport = new int[4];
-    private final int[] oldFBO = new int[1];
-
+    // setupClippingContextメソッド内でのみ使用されるキャッシュ変数
     private final CubismMatrix44 tmpMatrix = CubismMatrix44.create();
-    private Map<Integer, FloatBuffer> vertexArrayMap;
-    private Map<Integer, FloatBuffer> uvArrayMap;
-    private Map<Integer, ShortBuffer> indexArrayMap;
+    private final CubismMatrix44 tmpMatrixForMask = CubismMatrix44.create();
+    private final CubismMatrix44 tmpMatrixForDraw = CubismMatrix44.create();
+    private FloatBuffer[] vertexArrayCache;
+    private FloatBuffer[] uvArrayCache;
+    private ShortBuffer[] indexArrayCache;
 
     private final CubismRectangle tmpBoundsOnModel = CubismRectangle.create();
 
@@ -411,8 +452,8 @@ class CubismClippingManagerAndroid implements Closeable {
      *
      * @return color buffer
      */
-    public int getColorBuffer() {
-        return colorBuffer[0];
+    public int[] getColorBuffer() {
+        return maskColorBuffers;
     }
 
     /**
@@ -422,6 +463,15 @@ class CubismClippingManagerAndroid implements Closeable {
      */
     public List<CubismClippingContext> getClippingContextListForDraw() {
         return clippingContextListForDraw;
+    }
+
+    /**
+     * マスクの合計数をカウントする。
+     *
+     * @return マスクの合計数
+     */
+    public int getClippingMaskCount() {
+        return clippingContextListForMask.size();
     }
 
     /**
@@ -444,6 +494,77 @@ class CubismClippingManagerAndroid implements Closeable {
     }
 
     /**
+     * このバッファのレンダーテクスチャの枚数を取得する。
+     *
+     * @return このバッファのレンダーテクスチャの枚数
+     */
+    public int getRenderTextureCount() {
+        return renderTextureCount;
+    }
+
+    /**
+     * Get the address of the temporary render texture.
+     * If FrameBufferObject does not exist, create a new one.
+     *
+     * @return address of render texture
+     */
+    public int[] getMaskRenderTexture() {
+        // 前回使ったものを返す。
+        if (maskTexture != null && maskTexture.textures != null) {
+            maskTexture.frameNo = currentFrameNumber;
+
+            return maskRenderTextures;
+        }
+
+        // FrameBufferObjectが存在しない場合、新しく生成する
+        maskRenderTextures = new int[renderTextureCount];
+        // ColorBufferObjectが存在しない場合、新しく生成する
+        maskColorBuffers = new int[renderTextureCount];
+
+        // クリッピングバッファサイズを取得
+        final int width = (int) clippingMaskBufferSize.x;
+        final int height = (int) clippingMaskBufferSize.y;
+
+        for (int index = 0; index < renderTextureCount; index++) {
+            glGenTextures(1, maskColorBuffers, index);
+            glBindTexture(GL_TEXTURE_2D, maskColorBuffers[index]);
+            glTexImage2D(
+                GL_TEXTURE_2D,
+                0,
+                GL_RGBA,
+                width,
+                height,
+                0,
+                GL_RGBA,
+                GL_UNSIGNED_BYTE,
+                null
+            );
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glBindTexture(GL_TEXTURE_2D, 0);
+
+            glGenFramebuffers(1, maskRenderTextures, index);
+            glBindFramebuffer(GL_FRAMEBUFFER, maskRenderTextures[index]);
+            glFramebufferTexture2D(
+                GL_FRAMEBUFFER,
+                GL_COLOR_ATTACHMENT0,
+                GL_TEXTURE_2D,
+                maskColorBuffers[index],
+                0
+            );
+        }
+
+        int[] tmpFrameBufferObject = new int[1];
+        glGetIntegerv(GL_FRAMEBUFFER_BINDING, tmpFrameBufferObject, 0);
+        glBindFramebuffer(GL_FRAMEBUFFER, tmpFrameBufferObject[0]);
+
+        maskTexture = new CubismRenderTextureResource(currentFrameNumber, maskRenderTextures);
+        return maskRenderTextures;
+    }
+
+    /**
      * This class defines resources of render texture.
      * <p>
      * It is used in clipping masks.
@@ -454,19 +575,19 @@ class CubismClippingManagerAndroid implements Closeable {
          */
         int frameNo;
         /**
-         * texture address number
+         * an array of texture address number
          */
-        int texture;
+        int[] textures;
 
         /**
          * Constructor
          *
          * @param frameNo renderer's frame number
-         * @param texture texture address
+         * @param textures an array of texture address
          */
-        CubismRenderTextureResource(int frameNo, int texture) {
+        CubismRenderTextureResource(int frameNo, int[] textures) {
             this.frameNo = frameNo;
-            this.texture = texture;
+            this.textures = textures;
         }
     }
 
@@ -474,6 +595,14 @@ class CubismClippingManagerAndroid implements Closeable {
      * 1 for one channel at the time of the experiment, 3 for only RGB, and 4 for including alpha.
      */
     private static final int COLOR_CHANNEL_COUNT = 4;
+    /**
+     * 通常のフレームバッファ1枚あたりのマスク最大数
+     */
+    private static final int CLIPPING_MASK_MAX_COUNT_ON_DEFAULT = 36;
+    /**
+     * フレームバッファが2枚以上ある場合のフレームバッファ1枚あたりのマスク最大数
+     */
+    private static final int CLIPPING_MASK_MAX_COUNT_ON_MULTI_RENDER_TEXTURE = 32;
 
     /**
      * Check if the mask has already been created.
@@ -489,7 +618,7 @@ class CubismClippingManagerAndroid implements Closeable {
         for (int k = 0; k < clippingContextListForMask.size(); k++) {
             CubismClippingContext clipContext = clippingContextListForMask.get(k);
 
-            final int count = clipContext.getClippingIdCount();
+            final int count = clipContext.clippingIdCount;
             if (count != drawableMaskCounts) {
                 // If the number of pieces is different, it's different.
                 continue;
@@ -498,7 +627,7 @@ class CubismClippingManagerAndroid implements Closeable {
 
             // Check if they have the same ID. Since the number of arrays is the same, if the number of matches is the same, it is assumed the same thing.
             for (int i = 0; i < count; i++) {
-                final int clipId = clipContext.getClippingIdList()[i];
+                final int clipId = clipContext.clippingIdList[i];
                 for (int j = 0; j < count; ++j) {
                     if (drawableMasks[j] == clipId) {
                         sameCount++;
@@ -530,11 +659,11 @@ class CubismClippingManagerAndroid implements Closeable {
 
         // Determine if this mask is actually needed.
         // If there is even one "drawing object" available that uses this clipping, generating a mask is required.
-        final int clippedDrawCount = clippingContext.getClippedDrawableIndexList().size();
+        final int clippedDrawCount = clippingContext.clippedDrawableIndexList.size();
 
         for (int clippedDrawableIndex = 0; clippedDrawableIndex < clippedDrawCount; clippedDrawableIndex++) {
             // Find the rectangle to be drawn for a drawing object that uses a mask.
-            final int drawableIndex = clippingContext.getClippedDrawableIndexList().get(clippedDrawableIndex);
+            final int drawableIndex = clippingContext.clippedDrawableIndexList.get(clippedDrawableIndex);
 
             final int drawableVertexCount = model.getDrawableVertexCount(drawableIndex);
             float[] drawableVertices = model.getDrawableVertices(drawableIndex);
@@ -567,19 +696,19 @@ class CubismClippingManagerAndroid implements Closeable {
         }
 
         if (clippedDrawTotalMinX == Float.MAX_VALUE) {
-            clippingContext.isUsing(false);
+            clippingContext.isUsing = false;
 
-            CubismRectangle clippedDrawRect = clippingContext.getAllClippedDrawRect();
+            CubismRectangle clippedDrawRect = clippingContext.allClippedDrawRect;
             clippedDrawRect.setX(0.0f);
             clippedDrawRect.setY(0.0f);
             clippedDrawRect.setWidth(0.0f);
             clippedDrawRect.setHeight(0.0f);
         } else {
-            clippingContext.isUsing(true);
+            clippingContext.isUsing = true;
             float w = clippedDrawTotalMaxX - clippedDrawTotalMinX;
             float h = clippedDrawTotalMaxY - clippedDrawTotalMinY;
 
-            CubismRectangle clippedDrawRect = clippingContext.getAllClippedDrawRect();
+            CubismRectangle clippedDrawRect = clippingContext.allClippedDrawRect;
             clippedDrawRect.setX(clippedDrawTotalMinX);
             clippedDrawRect.setY(clippedDrawTotalMinY);
             clippedDrawRect.setWidth(w);
@@ -588,168 +717,152 @@ class CubismClippingManagerAndroid implements Closeable {
     }
 
     /**
-     * Get the address of the temporary render texture.
-     * If FrameBufferObject does not exist, create a new one.
-     *
-     * @return address of render texture
-     */
-    private int getMaskRenderTexture() {
-//        int[] result = new int[1];
-        forGetMaskRenderTextureResult[0] = 0;
-
-        // Get a temporary RenderTexture.
-        if (maskTexture != null && maskTexture.texture != 0) {
-            maskTexture.frameNo = currentFrameNumber;
-            forGetMaskRenderTextureResult[0] = maskTexture.texture;
-        }
-
-        if (forGetMaskRenderTextureResult[0] == 0) {
-            // If FramebufferObject does not exist, create a new one.
-            final int width = (int) clippingMaskBufferSize.x;
-            final int height = (int) clippingMaskBufferSize.y;
-
-            GLES20.glGenTextures(1, IntBuffer.wrap(colorBuffer));
-            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, colorBuffer[0]);
-            GLES20.glTexImage2D(
-                GLES20.GL_TEXTURE_2D,
-                0,
-                GLES20.GL_RGBA,
-                width,
-                height,
-                0,
-                GLES20.GL_RGBA,
-                GLES20.GL_UNSIGNED_BYTE,
-                null
-            );
-            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE);
-            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE);
-            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR);
-            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
-            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
-
-            int[] tmpFrameBufferObject = new int[1];
-            GLES20.glGetIntegerv(GLES20.GL_FRAMEBUFFER_BINDING, tmpFrameBufferObject, 0);
-
-            GLES20.glGenFramebuffers(1, forGetMaskRenderTextureResult, 0);
-            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, forGetMaskRenderTextureResult[0]);
-            GLES20.glFramebufferTexture2D(
-                GLES20.GL_FRAMEBUFFER,
-                GLES20.GL_COLOR_ATTACHMENT0,
-                GLES20.GL_TEXTURE_2D,
-                colorBuffer[0],
-                0
-            );
-            GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, tmpFrameBufferObject[0]);
-
-            maskTexture = new CubismRenderTextureResource(currentFrameNumber, forGetMaskRenderTextureResult[0]);
-        }
-
-        return forGetMaskRenderTextureResult[0];
-    }
-
-    private final int[] forGetMaskRenderTextureResult = new int[1];
-
-
-    /**
      * Layout to place the clipping context.
-     * Layout masks using as much of a single render texture as possible.
-     * Layout masks using as much of a single render texture as possible.
+     * Layout masks using the specified number of render textures as fully as possible.
      * If the number of mask groups is 4 or less, layout one mask for each RGBA channel; if the number is between 5 and 6, layout RGBA as 2,2,1,1.
      *
      * @param usingClipCount number of clipping contexts to place
      */
     private void setupLayoutBounds(int usingClipCount) {
+        final int useClippingMaskMaxCount = renderTextureCount <= 1
+                                            ? CLIPPING_MASK_MAX_COUNT_ON_DEFAULT
+                                            : CLIPPING_MASK_MAX_COUNT_ON_MULTI_RENDER_TEXTURE * renderTextureCount;
+        if (usingClipCount <= 0 || usingClipCount > useClippingMaskMaxCount) {
+            if (usingClipCount > useClippingMaskMaxCount) {
+                // マスクの制限数の警告を出す
+                int count = usingClipCount - useClippingMaskMaxCount;
+                cubismLogError("not supported mask count: " + count + "\n[Details] render texture count: " + renderTextureCount + ", mask count: " + usingClipCount);
+            }
+            // この場合は一つのマスクターゲットを毎回クリアして使用する
+            for (int index = 0; index < clippingContextListForMask.size(); index++) {
+                CubismClippingContext cc = clippingContextListForMask.get(index);
+
+                cc.layoutChannelNo = 0;   // どうせ毎回消すので固定で良い
+                cc.layoutBounds.setX(0.0f);
+                cc.layoutBounds.setY(0.0f);
+                cc.layoutBounds.setWidth(1.0f);
+                cc.layoutBounds.setHeight(1.0f);
+            }
+            return;
+        }
+
+        // レンダーテクスチャが1枚なら9分割する（最大36枚）
+        final int layoutCountMaxValue = renderTextureCount <= 1 ? 9 : 8;
+
         // Layout the masks using as much of one RenderTexture as possible.
         // If the number of mask groups is 4 or less, place one mask in each RGBA channel; if the number is between 5 and 6, place RGBA 2,2,1,1
+        int countPerSheetDiv = usingClipCount / renderTextureCount;     // レンダーテクスチャ1枚あたり何枚割り当てるか
+        int countPerSheetMod = usingClipCount % renderTextureCount;     // この番号のレンダーテクスチャまでに1つずつ配分する。
 
         // Use the RGBAs in order
         // Basic number of masks to place on one channel
-        final int div = usingClipCount / COLOR_CHANNEL_COUNT;
+        final int div = countPerSheetDiv / COLOR_CHANNEL_COUNT;
         // Remainder. Allocate one to each channel of this number.
-        final int mod = usingClipCount % COLOR_CHANNEL_COUNT;
+        final int mod = countPerSheetDiv % COLOR_CHANNEL_COUNT;
 
         // Prepare the channels for each RGBA. (0:R, 1:G, 2:B, 3:A)
         // Set them in order.
         int curClipIndex = 0;
 
-        for (int channelNo = 0; channelNo < COLOR_CHANNEL_COUNT; channelNo++) {
-            // Number of layouts for this channel.
-            final int layoutCount = div + (channelNo < mod ? 1 : 0);
+        for (int renderTextureNo = 0; renderTextureNo < renderTextureCount; renderTextureNo++) {
+            for (int channelNo = 0; channelNo < COLOR_CHANNEL_COUNT; channelNo++) {
+                // Number of layouts for this channel.
+                int layoutCount = div + (channelNo < mod ? 1 : 0);
 
-            // Determine the division method.
-            if (layoutCount == 0) {
-                // Do nothing.
-            } else if (layoutCount == 1) {
-                // Use everything as is.
-                CubismClippingContext cc = clippingContextListForMask.get(curClipIndex++);
-                cc.setLayoutChannelNo(channelNo);
-                CubismRectangle bounds = cc.getLayoutBounds();
-
-                bounds.setX(0.0f);
-                bounds.setY(0.0f);
-                bounds.setWidth(1.0f);
-                bounds.setHeight(1.0f);
-            } else if (layoutCount == 2) {
-                for (int i = 0; i < layoutCount; i++) {
-                    final int xpos = i % 2;
-
-                    CubismClippingContext cc = clippingContextListForMask.get(curClipIndex++);
-                    cc.setLayoutChannelNo(channelNo);
-                    CubismRectangle bounds = cc.getLayoutBounds();
-
-                    bounds.setX(xpos * 0.5f);
-                    bounds.setY(0.0f);
-                    bounds.setWidth(0.5f);
-                    bounds.setHeight(1.0f);
-                    // UVを2つに分解して使う
+                // このレンダーテクスチャにまだ割り当てられていなければ追加する
+                final int checkChannelNo = mod + 1 >= COLOR_CHANNEL_COUNT ? 0 : mod + 1;
+                if (layoutCount < layoutCountMaxValue && channelNo == checkChannelNo) {
+                    layoutCount += renderTextureNo < countPerSheetMod ? 1 : 0;
                 }
-            } else if (layoutCount <= 4) {
-                // 4分割して使う
-                for (int i = 0; i < layoutCount; i++) {
-                    final int xpos = i % 2;
-                    final int ypos = i / 2;
 
+                // Determine the division method.
+                if (layoutCount == 0) {
+                    // Do nothing.
+                } else if (layoutCount == 1) {
+                    // Use everything as is.
                     CubismClippingContext cc = clippingContextListForMask.get(curClipIndex++);
-                    cc.setLayoutChannelNo(channelNo);
-                    CubismRectangle bounds = cc.getLayoutBounds();
+                    cc.layoutChannelNo = channelNo;
+                    CubismRectangle bounds = cc.layoutBounds;
 
-                    bounds.setX(xpos * 0.5f);
-                    bounds.setY(ypos * 0.5f);
-                    bounds.setWidth(0.5f);
-                    bounds.setHeight(0.5f);
-                }
-            } else if (layoutCount <= 9) {
-                // 9分割して使う
-                for (int i = 0; i < layoutCount; i++) {
-                    final int xpos = i % 3;
-                    final int ypos = i / 3;
-
-                    CubismClippingContext cc = clippingContextListForMask.get(curClipIndex++);
-                    cc.setLayoutChannelNo(channelNo);
-                    CubismRectangle bounds = cc.getLayoutBounds();
-
-                    bounds.setX(xpos / 3.0f);
-                    bounds.setY(ypos / 3.0f);
-                    bounds.setWidth(1.0f / 3.0f);
-                    bounds.setHeight(1.0f / 3.0f);
-                }
-            } else {
-                cubismLogError("not supported mask count : " + layoutCount);
-
-                // Stop this program if in development mode.
-                assert false;
-
-                // If you continue to run, SetupShaderProgram() method will cause over-access, so you have no choice but to put it in properly.
-                // Of course, the result of drawing is so bad.
-                for (int i = 0; i < layoutCount; i++) {
-                    CubismClippingContext cc = clippingContextListForMask.get(curClipIndex++);
-                    cc.setLayoutChannelNo(0);
-
-                    CubismRectangle bounds = cc.getLayoutBounds();
                     bounds.setX(0.0f);
                     bounds.setY(0.0f);
                     bounds.setWidth(1.0f);
                     bounds.setHeight(1.0f);
+
+                    cc.bufferIndex = renderTextureNo;
+                } else if (layoutCount == 2) {
+                    for (int i = 0; i < layoutCount; i++) {
+                        final int xpos = i % 2;
+
+                        CubismClippingContext cc = clippingContextListForMask.get(curClipIndex++);
+                        cc.layoutChannelNo = channelNo;
+                        CubismRectangle bounds = cc.layoutBounds;
+
+                        // UVを2つに分解して使う
+                        bounds.setX(xpos * 0.5f);
+                        bounds.setY(0.0f);
+                        bounds.setWidth(0.5f);
+                        bounds.setHeight(1.0f);
+
+                        cc.bufferIndex = renderTextureNo;
+                    }
+                } else if (layoutCount <= 4) {
+                    // 4分割して使う
+                    for (int i = 0; i < layoutCount; i++) {
+                        final int xpos = i % 2;
+                        final int ypos = i / 2;
+
+                        CubismClippingContext cc = clippingContextListForMask.get(curClipIndex++);
+                        cc.layoutChannelNo = channelNo;
+                        CubismRectangle bounds = cc.layoutBounds;
+
+                        bounds.setX(xpos * 0.5f);
+                        bounds.setY(ypos * 0.5f);
+                        bounds.setWidth(0.5f);
+                        bounds.setHeight(0.5f);
+
+                        cc.bufferIndex = renderTextureNo;
+                    }
+                } else if (layoutCount <= layoutCountMaxValue) {
+                    // 9分割して使う
+                    for (int i = 0; i < layoutCount; i++) {
+                        final int xpos = i % 3;
+                        final int ypos = i / 3;
+
+                        CubismClippingContext cc = clippingContextListForMask.get(curClipIndex++);
+                        cc.layoutChannelNo = channelNo;
+                        CubismRectangle bounds = cc.layoutBounds;
+
+                        bounds.setX(xpos / 3.0f);
+                        bounds.setY(ypos / 3.0f);
+                        bounds.setWidth(1.0f / 3.0f);
+                        bounds.setHeight(1.0f / 3.0f);
+
+                        cc.bufferIndex = renderTextureNo;
+                    }
+                }
+                // マスクの制限枚数を超えた場合の処理
+                else {
+                    int count = usingClipCount - useClippingMaskMaxCount;
+                    cubismLogError("not supported mask count: " + count + "\n[Details] render texture count: " + renderTextureCount + ", mask count: " + usingClipCount);
+
+                    // Stop this program if in development mode.
+                    assert false;
+
+                    // If you continue to run, SetupShaderProgram() method will cause over-access, so you have no choice but to put it in properly.
+                    // Of course, the result of drawing is so bad.
+                    for (int i = 0; i < layoutCount; i++) {
+                        CubismClippingContext cc = clippingContextListForMask.get(curClipIndex++);
+                        cc.layoutChannelNo = 0;
+
+                        CubismRectangle bounds = cc.layoutBounds;
+                        bounds.setX(0.0f);
+                        bounds.setY(0.0f);
+                        bounds.setWidth(1.0f);
+                        bounds.setHeight(1.0f);
+
+                        cc.bufferIndex = 0;
+                    }
                 }
             }
         }
@@ -757,13 +870,22 @@ class CubismClippingManagerAndroid implements Closeable {
 
 
     /**
-     * Color buffer for masks.
+     * マスク用レンダーテクスチャのアドレス
      */
-    private final int[] colorBuffer = new int[1];
+    private int currentMaskRenderTexture;
+    /**
+     * レンダーテクスチャのリスト
+     */
+    private int[] maskRenderTextures;
+    /**
+     * マスク用カラーバッファのアドレスのリスト
+     */
+    private int[] maskColorBuffers;
     /**
      * Frame number given to the mask texture.
      */
     private int currentFrameNumber;
+
     /**
      * list of flags of color channel(RGBA)(0:R, 1:G, 2:B, 3:A)
      */
@@ -784,4 +906,8 @@ class CubismClippingManagerAndroid implements Closeable {
      * Buffer size for clipping mask.
      */
     private final CubismVector2 clippingMaskBufferSize = new CubismVector2(256, 256);
+    /**
+     * 生成するレンダーテクスチャの枚数
+     */
+    private int renderTextureCount;
 }

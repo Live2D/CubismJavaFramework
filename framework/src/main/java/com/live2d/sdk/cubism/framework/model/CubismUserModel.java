@@ -99,11 +99,24 @@ public abstract class CubismUserModel {
     }
 
     /**
-     * Create a renderer, and initialize it.
+     * Creates and initializes a renderer. The default number of mask buffers is 1.
      *
+     * @param type renderer type
      * @throws IllegalArgumentException Thrown when an undefined renderer type is given.
      */
     public void createRenderer(final RendererType type) {
+        createRenderer(type, 1);
+    }
+
+    /**
+     * Creates and initializes a renderer.<br>
+     * Please use this method if you would like to set the number of mask buffers other than default of 1.
+     *
+     * @param type renderer type
+     * @param maskBufferCount number of mask buffers to be generated
+     * @throws IllegalArgumentException thrown when an undefined renderer type is given.
+     */
+    public void createRenderer(RendererType type, int maskBufferCount) {
         switch (type) {
             case ANDROID:
                 renderer = CubismRendererAndroid.create();
@@ -113,7 +126,7 @@ public abstract class CubismUserModel {
         }
 
         // Bind a renderer with a model instance
-        renderer.initialize(model);
+        renderer.initialize(model, maskBufferCount);
     }
 
     /**
@@ -195,7 +208,6 @@ public abstract class CubismUserModel {
      * @return the model matrix
      */
     public CubismModelMatrix getModelMatrix() {
-//        return CubismModelMatrix.create(_modelMatrix);
         return modelMatrix;
     }
 
