@@ -44,42 +44,24 @@ class CubismJsonArray extends ACubismJsonValue {
     }
 
     @Override
-    public String getString() {
-        StringBuilder builder = new StringBuilder("[\n");
-
-        for (int i = 0; i < value.size(); i++) {
-            builder.append(stringBuffer);
-            builder.append(" ");
-            builder.append(value.get(i).getString());
-            builder.append("\n");
-        }
-
-        builder.append("]\n");
-
-        stringBuffer = builder.toString();
-        return stringBuffer;
-    }
-
-    @Override
-    public String getString(String defaultValue) {
-        return getString(defaultValue, "");
-    }
-
-    @Override
     public String getString(String defaultValue, String indent) {
-        StringBuilder builder = new StringBuilder(indent + "[\n");
+        // バッファに格納されている文字列を空にする
+        bufferForGetString.delete(0, bufferForGetString.length());
+
+        bufferForGetString.append(indent);
+        bufferForGetString.append("[\n");
 
         for (int i = 0; i < value.size(); i++) {
-            builder.append(indent);
-            builder.append(" ");
-            builder.append(value.get(i).getString(indent + " "));
-            builder.append("\n");
+            bufferForGetString.append(indent);
+            bufferForGetString.append(" ");
+            bufferForGetString.append(value.get(i).getString(indent + " "));
+            bufferForGetString.append("\n");
         }
 
-        builder.append(indent);
-        builder.append("]\n");
+        bufferForGetString.append(indent);
+        bufferForGetString.append("]\n");
 
-        stringBuffer = builder.toString();
+        stringBuffer = bufferForGetString.toString();
         return stringBuffer;
     }
 
@@ -114,7 +96,17 @@ class CubismJsonArray extends ACubismJsonValue {
     }
 
     /**
+     * {@code getString}メソッドで使われる一時的な文字列バッファの最小容量。
+     */
+    private static final int MINIMUM_CAPACITY = 128;
+
+    /**
      * JSON Array value
      */
     private final List<ACubismJsonValue> value = new ArrayList<ACubismJsonValue>();
+
+    /**
+     * {@code getString}で使用される文字列バッファ
+     */
+    private final StringBuffer bufferForGetString = new StringBuffer(MINIMUM_CAPACITY);
 }

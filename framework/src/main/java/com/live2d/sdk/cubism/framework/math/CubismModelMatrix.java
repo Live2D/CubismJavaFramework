@@ -7,8 +7,6 @@
 
 package com.live2d.sdk.cubism.framework.math;
 
-import com.live2d.sdk.cubism.framework.utils.jsonparser.CubismJsonString;
-
 import java.util.Map;
 
 /**
@@ -166,7 +164,7 @@ public class CubismModelMatrix extends CubismMatrix44 {
      *
      * @param layout layout information
      */
-    public void setupFromLayout(Map<CubismJsonString, Float> layout) {
+    public void setupFromLayout(Map<String, Float> layout) {
         final String keyWidth = "width";
         final String keyHeight = "height";
         final String keyX = "x";
@@ -178,8 +176,8 @@ public class CubismModelMatrix extends CubismMatrix44 {
         final String keyLeft = "left";
         final String keyRight = "right";
 
-        for (Map.Entry<CubismJsonString, Float> entry : layout.entrySet()) {
-            String key = entry.getKey().getString();
+        for (Map.Entry<String, Float> entry : layout.entrySet()) {
+            String key = entry.getKey();
             if (key.equals(keyWidth)) {
                 setWidth(entry.getValue());
             } else if (key.equals(keyHeight)) {
@@ -187,8 +185,8 @@ public class CubismModelMatrix extends CubismMatrix44 {
             }
         }
 
-        for (Map.Entry<CubismJsonString, Float> entry : layout.entrySet()) {
-            String key = entry.getKey().getString();
+        for (Map.Entry<String, Float> entry : layout.entrySet()) {
+            String key = entry.getKey();
             float value = entry.getValue();
 
             if (key.equals(keyX)) {

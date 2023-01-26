@@ -23,8 +23,8 @@ class CubismJsonNumber extends ACubismJsonValue {
     }
 
     @Override
-    public String getString() {
-        return String.valueOf(value);
+    public String getString(String defaultValue, String indent) {
+        return stringBuffer;
     }
 
 
@@ -76,6 +76,7 @@ class CubismJsonNumber extends ACubismJsonValue {
      */
     private CubismJsonNumber(double value) {
         this.value = value;
+        stringBuffer = String.valueOf(value);
     }
 
     /**

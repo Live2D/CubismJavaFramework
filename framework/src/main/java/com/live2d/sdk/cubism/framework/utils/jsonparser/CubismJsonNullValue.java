@@ -17,7 +17,7 @@ class CubismJsonNullValue extends ACubismJsonValue {
     }
 
     @Override
-    public String getString() {
+    public String getString(String defaultValue, String indent) {
         return stringBuffer;
     }
 

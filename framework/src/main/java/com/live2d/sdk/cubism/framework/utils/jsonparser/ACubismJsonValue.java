@@ -41,14 +41,14 @@ public abstract class ACubismJsonValue {
      *
      * @return the JSON Value's string expression
      */
-    public abstract String getString();
+    public abstract String getString(String defaultValue, String indent);
 
     public String getString(String defaultValue) {
-        return getString();
+        return getString(defaultValue, "");
     }
 
-    public String getString(String defaultValue, String indent) {
-        return getString();
+    public String getString() {
+        return getString("", "");
     }
 
     /**
@@ -62,6 +62,13 @@ public abstract class ACubismJsonValue {
         return null;
     }
 
+    /**
+     * もしこのインターフェースが実装されているクラスが{@code CubismJsonObject}ならば、{@code CubismJsonString}と{@code ACubismJsonValue}をペアにしたMapを返す。<br>
+     * もし他の具象クラスに実装されていた場合は、{@code null}を返す。
+     *
+     * @param defaultValue デフォルト値
+     * @return デフォルト値
+     */
     public Map<CubismJsonString, ACubismJsonValue> getMap(Map<CubismJsonString, ACubismJsonValue> defaultValue) {
         return defaultValue;
     }
@@ -77,6 +84,13 @@ public abstract class ACubismJsonValue {
         return new ArrayList<ACubismJsonValue>();
     }
 
+    /**
+     * もしこのインターフェースが実装されているクラスが{@code CubismJsonArray}ならば、{@code ACubismJsonValue}のListを返す。<br>
+     * もし他の具象クラスに実装されていた場合は、{@code null}を返す。
+     *
+     * @param defaultValue デフォルト値
+     * @return デフォルト値
+     */
     public List<ACubismJsonValue> getList(List<ACubismJsonValue> defaultValue) {
         return defaultValue;
     }

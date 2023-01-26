@@ -8,10 +8,10 @@
 package com.live2d.sdk.cubism.framework.rendering.android;
 
 import com.live2d.sdk.cubism.framework.math.CubismMatrix44;
-import com.live2d.sdk.cubism.framework.math.CubismRectangle;
 import com.live2d.sdk.cubism.framework.math.CubismVector2;
 import com.live2d.sdk.cubism.framework.model.CubismModel;
 import com.live2d.sdk.cubism.framework.rendering.CubismRenderer;
+import com.live2d.sdk.cubism.framework.type.csmRectF;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;
@@ -269,9 +269,9 @@ class CubismClippingManagerAndroid implements Closeable {
             CubismClippingContext clipContext = clippingContextListForMask.get(j);
 
             // The enclosing rectangle in logical coordinates of all drawing objects that use this mask.
-            CubismRectangle allClippedDrawRect = clipContext.allClippedDrawRect;
+            csmRectF allClippedDrawRect = clipContext.allClippedDrawRect;
             // Fit the mask in here.
-            CubismRectangle layoutBoundsOnTex01 = clipContext.layoutBounds;
+            csmRectF layoutBoundsOnTex01 = clipContext.layoutBounds;
 
             float scaleX, scaleY;
             final float margin = 0.05f;
@@ -435,7 +435,7 @@ class CubismClippingManagerAndroid implements Closeable {
     private FloatBuffer[] uvArrayCache;
     private ShortBuffer[] indexArrayCache;
 
-    private final CubismRectangle tmpBoundsOnModel = CubismRectangle.create();
+    private final csmRectF tmpBoundsOnModel = csmRectF.create();
 
 
     /**
@@ -698,7 +698,7 @@ class CubismClippingManagerAndroid implements Closeable {
         if (clippedDrawTotalMinX == Float.MAX_VALUE) {
             clippingContext.isUsing = false;
 
-            CubismRectangle clippedDrawRect = clippingContext.allClippedDrawRect;
+            csmRectF clippedDrawRect = clippingContext.allClippedDrawRect;
             clippedDrawRect.setX(0.0f);
             clippedDrawRect.setY(0.0f);
             clippedDrawRect.setWidth(0.0f);
@@ -708,7 +708,7 @@ class CubismClippingManagerAndroid implements Closeable {
             float w = clippedDrawTotalMaxX - clippedDrawTotalMinX;
             float h = clippedDrawTotalMaxY - clippedDrawTotalMinY;
 
-            CubismRectangle clippedDrawRect = clippingContext.allClippedDrawRect;
+            csmRectF clippedDrawRect = clippingContext.allClippedDrawRect;
             clippedDrawRect.setX(clippedDrawTotalMinX);
             clippedDrawRect.setY(clippedDrawTotalMinY);
             clippedDrawRect.setWidth(w);
@@ -782,7 +782,7 @@ class CubismClippingManagerAndroid implements Closeable {
                     // Use everything as is.
                     CubismClippingContext cc = clippingContextListForMask.get(curClipIndex++);
                     cc.layoutChannelNo = channelNo;
-                    CubismRectangle bounds = cc.layoutBounds;
+                    csmRectF bounds = cc.layoutBounds;
 
                     bounds.setX(0.0f);
                     bounds.setY(0.0f);
@@ -796,7 +796,7 @@ class CubismClippingManagerAndroid implements Closeable {
 
                         CubismClippingContext cc = clippingContextListForMask.get(curClipIndex++);
                         cc.layoutChannelNo = channelNo;
-                        CubismRectangle bounds = cc.layoutBounds;
+                        csmRectF bounds = cc.layoutBounds;
 
                         // UVを2つに分解して使う
                         bounds.setX(xpos * 0.5f);
@@ -814,7 +814,7 @@ class CubismClippingManagerAndroid implements Closeable {
 
                         CubismClippingContext cc = clippingContextListForMask.get(curClipIndex++);
                         cc.layoutChannelNo = channelNo;
-                        CubismRectangle bounds = cc.layoutBounds;
+                        csmRectF bounds = cc.layoutBounds;
 
                         bounds.setX(xpos * 0.5f);
                         bounds.setY(ypos * 0.5f);
@@ -831,7 +831,7 @@ class CubismClippingManagerAndroid implements Closeable {
 
                         CubismClippingContext cc = clippingContextListForMask.get(curClipIndex++);
                         cc.layoutChannelNo = channelNo;
-                        CubismRectangle bounds = cc.layoutBounds;
+                        csmRectF bounds = cc.layoutBounds;
 
                         bounds.setX(xpos / 3.0f);
                         bounds.setY(ypos / 3.0f);
@@ -855,7 +855,7 @@ class CubismClippingManagerAndroid implements Closeable {
                         CubismClippingContext cc = clippingContextListForMask.get(curClipIndex++);
                         cc.layoutChannelNo = 0;
 
-                        CubismRectangle bounds = cc.layoutBounds;
+                        csmRectF bounds = cc.layoutBounds;
                         bounds.setX(0.0f);
                         bounds.setY(0.0f);
                         bounds.setWidth(1.0f);

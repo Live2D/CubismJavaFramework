@@ -55,10 +55,10 @@ public class CubismJson {
      * @param buffer JSON byte data
      */
     private void parse(byte[] buffer) {
-        String json = new String(buffer);
-        lexer = new CubismJsonLexer(json);
-
         try {
+            String json = new String(buffer, "UTF-8");
+            lexer = new CubismJsonLexer(json);
+
             token = lexer.getNextToken();
             root = createValue();
         } catch (IOException e) {

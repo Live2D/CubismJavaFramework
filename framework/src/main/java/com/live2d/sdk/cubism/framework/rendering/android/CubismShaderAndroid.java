@@ -8,8 +8,8 @@
 package com.live2d.sdk.cubism.framework.rendering.android;
 
 import com.live2d.sdk.cubism.framework.math.CubismMatrix44;
-import com.live2d.sdk.cubism.framework.math.CubismRectangle;
 import com.live2d.sdk.cubism.framework.rendering.CubismRenderer;
+import com.live2d.sdk.cubism.framework.type.csmRectF;
 
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
@@ -152,7 +152,7 @@ class CubismShaderAndroid {
                 0
             );
 
-            CubismRectangle rect =
+            csmRectF rect =
                 renderer.getClippingContextBufferForMask()
                         .layoutBounds;
 

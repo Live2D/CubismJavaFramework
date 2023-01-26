@@ -92,6 +92,10 @@ class CubismJsonToken {
         return stringValue;
     }
 
+    public void setStringValue(String stringValue) {
+        this.stringValue = stringValue;
+    }
+
     /**
      * Get number value.
      *
@@ -99,6 +103,10 @@ class CubismJsonToken {
      */
     public double getNumberValue() {
         return numberValue;
+    }
+
+    public void setNumberValue(double numberValue) {
+        this.numberValue = numberValue;
     }
 
     /**

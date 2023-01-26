@@ -6,19 +6,19 @@
  */
 
 
-package com.live2d.sdk.cubism.framework.math;
+package com.live2d.sdk.cubism.framework.type;
 
 /**
  * This class defines a rectangle form(a coordinate and a length is float value)
  */
-public class CubismRectangle {
+public class csmRectF {
     /**
      * Create the new CubismRectangle instance.
      *
      * @return CubismRectangle instance
      */
-    public static CubismRectangle create() {
-        return new CubismRectangle();
+    public static csmRectF create() {
+        return new csmRectF();
     }
 
     /**
@@ -30,13 +30,13 @@ public class CubismRectangle {
      * @param h height
      * @return CubismRectangle instance
      */
-    public static CubismRectangle create(
+    public static csmRectF create(
         float x,
         float y,
         float w,
         float h
     ) {
-        return new CubismRectangle(x, y, w, h);
+        return new csmRectF(x, y, w, h);
     }
 
     /**
@@ -46,8 +46,8 @@ public class CubismRectangle {
      * @param r CubismRectangle instance to be copied
      * @return CubismRectangle instance
      */
-    public static CubismRectangle create(CubismRectangle r) {
-        return new CubismRectangle(r);
+    public static csmRectF create(csmRectF r) {
+        return new csmRectF(r);
     }
 
 
@@ -90,7 +90,7 @@ public class CubismRectangle {
     /**
      * Set a value to this rectangle.
      */
-    public void setRect(CubismRectangle r) {
+    public void setRect(csmRectF r) {
         x = r.getX();
         y = r.getY();
         width = r.getWidth();
@@ -185,7 +185,7 @@ public class CubismRectangle {
     /**
      * Constructor
      */
-    private CubismRectangle() {}
+    private csmRectF() {}
 
     /**
      * Constructor with each value.
@@ -195,7 +195,7 @@ public class CubismRectangle {
      * @param w width
      * @param h height
      */
-    private CubismRectangle(
+    private csmRectF(
         final float x,
         final float y,
         final float w,
@@ -207,7 +207,7 @@ public class CubismRectangle {
         this.height = h;
     }
 
-    private CubismRectangle(CubismRectangle r) {
+    private csmRectF(csmRectF r) {
         setRect(r);
     }
 

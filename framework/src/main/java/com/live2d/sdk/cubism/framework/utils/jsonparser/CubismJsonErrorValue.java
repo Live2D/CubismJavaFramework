@@ -11,7 +11,7 @@ package com.live2d.sdk.cubism.framework.utils.jsonparser;
 
 class CubismJsonErrorValue extends ACubismJsonValue {
     @Override
-    public String getString() {
+    public String getString(String defaultValue, String indent) {
         return stringBuffer;
     }
 

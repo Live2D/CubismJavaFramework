@@ -92,7 +92,6 @@ public class CubismModelSettingJson implements ICubismModelSetting {
             return 0;
         }
         return jsonFrequencyValue.get(FrequentNode.HIT_AREAS.id).size();
-
     }
 
     @Override
@@ -166,15 +165,6 @@ public class CubismModelSettingJson implements ICubismModelSetting {
     }
 
     @Override
-    public Map<CubismJsonString, ACubismJsonValue> getMotionMap() {
-        ACubismJsonValue jsonValue = jsonFrequencyValue.get(FrequentNode.MOTIONS.id);
-        if (jsonValue == null) {
-            return Collections.emptyMap();
-        }
-        return jsonValue.getMap();
-    }
-
-    @Override
     public int getMotionCount(final String groupName) {
         if (!existsMotionGroupName(groupName)) {
             return 0;
@@ -228,7 +218,7 @@ public class CubismModelSettingJson implements ICubismModelSetting {
     }
 
     @Override
-    public boolean getLayoutMap(Map<CubismJsonString, Float> outLayoutMap) {
+    public boolean getLayoutMap(Map<String, Float> outLayoutMap) {
         Map<CubismJsonString, ACubismJsonValue> map = json.getRoot().get(JsonKey.LAYOUT.key).getMap();
 
         if (map == null) {
@@ -237,7 +227,7 @@ public class CubismModelSettingJson implements ICubismModelSetting {
 
         boolean result = false;
         for (Map.Entry<CubismJsonString, ACubismJsonValue> entry : map.entrySet()) {
-            outLayoutMap.put(entry.getKey(), entry.getValue().toFloat());
+            outLayoutMap.put(entry.getKey().getString(), entry.getValue().toFloat());
             result = true;
         }
 

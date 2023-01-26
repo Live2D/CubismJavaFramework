@@ -11,8 +11,7 @@ package com.live2d.sdk.cubism.framework.utils.jsonparser;
 import com.live2d.sdk.cubism.framework.exception.CubismJsonParseException;
 
 import java.io.IOException;
-import java.io.LineNumberReader;
-import java.io.StringReader;
+import java.util.Arrays;
 
 /**
  * This class offers a function of JSON lexer.
@@ -24,10 +23,17 @@ class CubismJsonLexer {
      * @param json string of JSON
      */
     public CubismJsonLexer(String json) {
+        // 上位層で、nullだったら例外を出しているため、
+        // 引数がnullであることは考えられない
         assert json != null;
 
-        StringReader reader = new StringReader(json);
-        this.json = new LineNumberReader(reader);
+        // char配列に変換する
+        jsonChars = json.toCharArray();
+        jsonCharsLength = jsonChars.length;
+
+        // トークン解析用のバッファを初期化
+        // 初期容量は128。128文字を超えるトークンが出現するならばその都度拡張する。
+        parsedTokonBuffer = new char[MINIMUM_CAPACITY];
     }
 
     /**
@@ -39,92 +45,99 @@ class CubismJsonLexer {
             updateNextChar();
         }
 
+        // null文字で埋める
+        Arrays.fill(parsedTokonBuffer, 0, bufferIndex, '\0');
+        bufferIndex = 0;
+
         // A Number token
         // A process when beginning at minus sign
         if (nextChar == '-') {
-            StringBuilder value = new StringBuilder("-");
+            append('-');
             updateNextChar();
 
             if (Character.isDigit(nextChar)) {
-                value.append(buildNumber());
-                return new CubismJsonToken(Double.parseDouble(value.toString()));
+                buildNumber();
+                String numberStr = String.copyValueOf(parsedTokonBuffer, 0, bufferIndex);
+                NUMBER.setNumberValue(Double.parseDouble(numberStr));
+
+                return NUMBER;
             } else {
-                throw new CubismJsonParseException("Number's format is incorrect.", json.getLineNumber());
+                throw new CubismJsonParseException("Number's format is incorrect.", lineNumber);
             }
         }
         // A process when beginning at a number except 0.
         else if (Character.isDigit(nextChar)) {
-            return new CubismJsonToken(Double.parseDouble(buildNumber().toString()));
+            buildNumber();
+            String numberStr = String.copyValueOf(parsedTokonBuffer, 0, bufferIndex);
+            NUMBER.setNumberValue(Double.parseDouble(numberStr));
+
+            return NUMBER;
         }
         // true
         else if (nextChar == 't') {
-            StringBuilder value = new StringBuilder();
-            value.append(nextChar);
+            append(nextChar);
             updateNextChar();
 
             for (int i = 0; i < 3; i++) {
-                value.append(nextChar);
+                append(nextChar);
                 updateNextChar();
             }
 
             // If "value" does not create true value, send an exception.
-            if (!value.toString().equals("true")) {
-                throw new CubismJsonParseException("Boolean's format or spell is incorrect.", json.getLineNumber());
+            String trueString = String.copyValueOf(parsedTokonBuffer, 0, bufferIndex);
+            if (!trueString.equals("true")) {
+                throw new CubismJsonParseException("Boolean's format or spell is incorrect.", lineNumber);
             }
-
-            return new CubismJsonToken(true);
+            return TRUE;
         }
         // false
         else if (nextChar == 'f') {
-            StringBuilder value = new StringBuilder();
-            value.append(nextChar);
+            append(nextChar);
             updateNextChar();
 
             for (int i = 0; i < 4; i++) {
-                value.append(nextChar);
+                append(nextChar);
                 updateNextChar();
             }
 
             // If the value does not equals to "false" value, send the exception.
-            if (!value.toString().equals("false")) {
-                throw new CubismJsonParseException("Boolean's format or spell is incorrect.", json.getLineNumber());
+            String falseString = String.copyValueOf(parsedTokonBuffer, 0, bufferIndex);
+            if (!falseString.equals("false")) {
+                throw new CubismJsonParseException("Boolean's format or spell is incorrect.", lineNumber);
             }
-
-            return new CubismJsonToken(false);
+            return FALSE;
         }
         // null
         else if (nextChar == 'n') {
-            StringBuilder value = new StringBuilder();
-            value.append(nextChar);
+            append(nextChar);
             updateNextChar();
 
             for (int i = 0; i < 3; i++) {
-                value.append(nextChar);
+                append(nextChar);
                 updateNextChar();
             }
 
             // If the JSON value does not equal to the "null" value, send an exception.
-            if (!value.toString().equals("null")) {
-                throw new CubismJsonParseException("Boolean's format or spell is incorrect.", json.getLineNumber());
+            String nullString = String.copyValueOf(parsedTokonBuffer, 0, bufferIndex);
+            if (!nullString.equals("null")) {
+                throw new CubismJsonParseException("JSON Null's format or spell is incorrect.", lineNumber);
             }
-
-            return new CubismJsonToken();
+            return NULL;
         } else if (nextChar == '{') {
             updateNextChar();
-            return new CubismJsonToken(CubismJsonToken.TokenType.LBRACE);
+            return LBRACE;
         } else if (nextChar == '}') {
             updateNextChar();
-            return new CubismJsonToken(CubismJsonToken.TokenType.RBRACE);
+            return RBRACE;
         } else if (nextChar == '[') {
             updateNextChar();
-            return new CubismJsonToken(CubismJsonToken.TokenType.LSQUARE_BRACKET);
+            return LSQUARE_BRACKET;
         } else if (nextChar == ']') {
             updateNextChar();
-            return new CubismJsonToken(CubismJsonToken.TokenType.RSQUARE_BRACKET);
+            return RSQUARE_BRACKET;
         }
         // If next character is double quote, string token is created.
         else if (nextChar == '"') {
-            StringBuilder value = new StringBuilder();
             updateNextChar();
 
             // Until closing by double quote("), it is continued to read.
@@ -132,27 +145,28 @@ class CubismJsonLexer {
                 // Consider a escape sequence.
                 if (nextChar == '\\') {
                     updateNextChar();
-                    value.append(buildEscapedString());
+                    buildEscapedString();
                 } else {
-                    value.append(nextChar);
+                    append(nextChar);
                 }
                 updateNextChar();
             }
             updateNextChar();
-            return new CubismJsonToken(value.toString());
+            STRING.setStringValue(String.valueOf(parsedTokonBuffer, 0, bufferIndex));
+
+            return STRING;
         }
         // Colon(:)
         else if (nextChar == ':') {
             updateNextChar();
-            return new CubismJsonToken(CubismJsonToken.TokenType.COLON);
+            return COLON;
         }
         // Comma(,)
         else if (nextChar == ',') {
             updateNextChar();
-            return new CubismJsonToken(CubismJsonToken.TokenType.COMMA);
+            return COMMA;
         }
-
-        throw new CubismJsonParseException("The JSON is not closed properly, or there is some other malformed form.", json.getLineNumber());
+        throw new CubismJsonParseException("The JSON is not closed properly, or there is some other malformed form.", lineNumber);
     }
 
     /**
@@ -161,166 +175,150 @@ class CubismJsonLexer {
      * @return current line number
      */
     public int getCurrentLineNumber() {
-        return json.getLineNumber();
+        return lineNumber;
     }
 
     /**
      * Build number string.
      *
-     * @return a number string
-     *
      * @throws CubismJsonParseException the exception at failing to parse
      */
-    private StringBuilder buildNumber() throws CubismJsonParseException, IOException {
-        StringBuilder value = new StringBuilder();
-
+    private void buildNumber() throws CubismJsonParseException {
         if (nextChar == '0') {
-            value.append(nextChar);
+            append(nextChar);
             updateNextChar();
-
-            value.append(buildDoubleOrExpNumber());
-
+            buildDoubleOrExpNumber();
         } else {
-            value.append(nextChar);
+            append(nextChar);
             updateNextChar();
 
             // Repeat processes until appearing a character except dot, exponential expression or number.
             while (Character.isDigit(nextChar)) {
-                value.append(nextChar);
+                append(nextChar);
                 updateNextChar();
             }
-            value.append(buildDoubleOrExpNumber());
+            buildDoubleOrExpNumber();
         }
-        return value;
     }
 
     /**
      * Build double or exponential number.
      *
-     * @return double or exponential number
-     *
      * @throws CubismJsonParseException the exception at failing to parse
      */
-    private StringBuilder buildDoubleOrExpNumber() throws CubismJsonParseException, IOException {
-        StringBuilder value = new StringBuilder();
-
+    private void buildDoubleOrExpNumber() throws CubismJsonParseException {
         // If the next character is dot, floating point number is created.
         if (nextChar == '.') {
-            value.append(buildDoubleNumber());
+            buildDoubleNumber();
         }
         // If there is an e or E, it is considered an exponential expression.
         if (nextChar == 'e' || nextChar == 'E') {
-            value.append(buildExponents());
+            buildExponents();
         }
-        return value;
     }
 
     /**
      * Return floating point number as strings(StringBuilder).
      *
-     * @return the parsed floating point number
-     *
      * @throws CubismJsonParseException the exception at failing to parse
      */
-    private StringBuilder buildDoubleNumber() throws CubismJsonParseException, IOException {
-        StringBuilder value = new StringBuilder(".");
+    private void buildDoubleNumber() throws CubismJsonParseException {
+        append('.');
         updateNextChar();
 
         // If the character following dot sign is not a number, an exception is thrown.
         if (!Character.isDigit(nextChar)) {
-            throw new CubismJsonParseException("Number's format is incorrect.", json.getLineNumber());
+            throw new CubismJsonParseException("Number's format is incorrect.", lineNumber);
         }
         do {
-            value.append(nextChar);
+            append(nextChar);
             updateNextChar();
         } while (Character.isDigit(nextChar));
-
-        return value;
     }
 
     /**
      * Build a number string used an exponential expression.
      *
-     * @return the parsed number string used an exponential expression
-     *
      * @throws CubismJsonParseException the exception at failing to parse
      */
-    private StringBuilder buildExponents() throws CubismJsonParseException, IOException {
-        StringBuilder value = new StringBuilder(String.valueOf(nextChar));
+    private void buildExponents() throws CubismJsonParseException {
+        append(nextChar);
         updateNextChar();
 
         // Handle cases where a number is preceded by a sign.
         if (nextChar == '+') {
-            value.append(nextChar);
+            append(nextChar);
             updateNextChar();
         } else if (nextChar == '-') {
-            value.append(nextChar);
+            append(nextChar);
             updateNextChar();
         }
         // If the character is not a number or a sign, an exception is thrown.
         if (!Character.isDigit(nextChar)) {
-            throw new CubismJsonParseException(value + "\n: " + "Exponent value's format is incorrect.", json.getLineNumber());
+            throw new CubismJsonParseException(String.copyValueOf(parsedTokonBuffer, 0, bufferIndex) + "\n: " + "Exponent value's format is incorrect.", lineNumber);
         }
 
         do {
-            value.append(nextChar);
+            append(nextChar);
             updateNextChar();
         } while (Character.isDigit(nextChar));
-
-        return value;
     }
 
     /**
      * Build a string used an escape sequence.
      *
-     * @return Escaped string
-     *
      * @throws CubismJsonParseException the exception at failing to parse
      */
-    private StringBuilder buildEscapedString() throws CubismJsonParseException, IOException {
-        StringBuilder value = new StringBuilder();
-
+    private void buildEscapedString() throws CubismJsonParseException {
         switch (nextChar) {
             case '"':
             case '\\':
             case '/':
-                value.append(nextChar);
+                append(nextChar);
                 break;
             case 'b':
-                value.append("\b");
+                append('\b');
                 break;
             case 'f':
-                value.append("\f");
+                append('\f');
                 break;
             case 'n':
-                value.append("\n");
+                append('\n');
                 break;
             case 'r':
-                value.append("\r");
+                append('\r');
                 break;
             case 't':
-                value.append("\t");
+                append('\t');
                 break;
             case 'u': {
-                StringBuilder tmp = new StringBuilder();
-                tmp.append('\\');
-                tmp.append('u');
+                // バッファをクリアする
+                bufferForHexadecimalString.delete(0, 16);
+
+                bufferForHexadecimalString.append('\\');
+                bufferForHexadecimalString.append('u');
                 for (int i = 0; i < 4; i++) {
                     updateNextChar();
-                    tmp.append(nextChar);
+                    bufferForHexadecimalString.append(nextChar);
                 }
                 // Check whether it is hex number. If there is a problem, an exception is thrown.
-                String tmp2 = tmp.toString();
-                if (!tmp2.matches("\\\\u[a-fA-F0-9]{4}")) {
-                    throw new CubismJsonParseException(tmp + "\n: " + "The unicode notation is incorrect.", json.getLineNumber());
+                String tmp = bufferForHexadecimalString.toString();
+                if (!tmp.matches("\\\\u[a-fA-F0-9]{4}")) {
+                    throw new CubismJsonParseException(bufferForHexadecimalString + "\n: " + "The unicode notation is incorrect.", lineNumber);
                 }
 
-                value.append(tmp2);
+                for (int i = 0; i < tmp.length(); i++) {
+                    append(tmp.charAt(i));
+                }
                 break;
             }
         }
-        return value;
     }
+
+    /**
+     * {@code buildEscapedString}の16進数の文字コードをパースする箇所で使用されるバッファ。
+     */
+    private static final StringBuffer bufferForHexadecimalString = new StringBuffer();
 
     /**
      * Whether a character is white space character.
@@ -335,37 +333,126 @@ class CubismJsonLexer {
     /**
      * Read a next character
      */
-    private void updateNextChar() throws IOException {
-        // Read the next line when the character count reaches the end of the line.
-        if (lineIndex == lineString.length() - 1) {
-            String newLine;
-            newLine = json.readLine();
+    private void updateNextChar() {
+        // 文字を全部読んだら、次の文字をnull文字にセットしてreturnする
+        if (charIndex >= jsonCharsLength) {
+            nextChar = '\0';
+            return;
+        }
 
-            if (newLine == null) {
-                lineString = null;
-                nextChar = '\0';
-                return;
-            }
+        nextChar = jsonChars[charIndex];
+        charIndex++;
 
-            lineString = newLine + " ";
-            lineIndex = 0;
-            nextChar = lineString.charAt(lineIndex);
-        } else {
-            lineIndex++;
-            nextChar = lineString.charAt(lineIndex);
+        // 改行コードがあれば行数をインクリメントする
+        if (nextChar == '\n') {
+            lineNumber++;
         }
     }
 
     /**
-     * JSON string
+     * Tokonのパース用の文字列バッファに、引数で指定された文字リテラルを追加する。
+     *
+     * @param c 追加する文字リテラル
      */
-    private final LineNumberReader json;
+    private void append(char c) {
+        // Tokenをパースするためのバッファがいっぱいになったら、バッファサイズを2倍にする
+        if (bufferLength == bufferIndex) {
+            bufferLength *= 2;
+            char[] tmp = new char[bufferLength];
+            System.arraycopy(parsedTokonBuffer, 0, tmp, 0, bufferIndex);
 
-    private int lineIndex = -1;
-    private String lineString = "";
+            parsedTokonBuffer = tmp;
+        }
+        parsedTokonBuffer[bufferIndex] = c;
+        bufferIndex++;
+    }
+
+    // Tokenを都度生成せずに定数として保持する
+    /**
+     * 左波カッコ'{'のトークン
+     */
+    private static final CubismJsonToken LBRACE = new CubismJsonToken(CubismJsonToken.TokenType.LBRACE);
+    /**
+     * 右波カッコ'}'のトークン
+     */
+    private static final CubismJsonToken RBRACE = new CubismJsonToken(CubismJsonToken.TokenType.RBRACE);
+    /**
+     * 左角カッコ'['のトークン
+     */
+    private static final CubismJsonToken LSQUARE_BRACKET = new CubismJsonToken(CubismJsonToken.TokenType.LSQUARE_BRACKET);
+    /**
+     * 左角カッコ'['のトークン
+     */
+    private static final CubismJsonToken RSQUARE_BRACKET = new CubismJsonToken(CubismJsonToken.TokenType.RSQUARE_BRACKET);
+    /**
+     * コロン':'のトークン
+     */
+    private static final CubismJsonToken COLON = new CubismJsonToken(CubismJsonToken.TokenType.COLON);
+    /**
+     * カンマ','のトークン
+     */
+    private static final CubismJsonToken COMMA = new CubismJsonToken(CubismJsonToken.TokenType.COMMA);
+    /**
+     * 真偽値'true'のトークン
+     */
+    private static final CubismJsonToken TRUE = new CubismJsonToken(true);
+    /**
+     * 真偽値'false'のトークン
+     */
+    private static final CubismJsonToken FALSE = new CubismJsonToken(false);
+    /**
+     * 'null'のトークン
+     */
+    private static final CubismJsonToken NULL = new CubismJsonToken();
+
+    // 中の値を書き換えて使用する
+    /**
+     * 文字列のトークン
+     */
+    private static final CubismJsonToken STRING = new CubismJsonToken("");
+    /**
+     * 数値のトークン
+     */
+    private static final CubismJsonToken NUMBER = new CubismJsonToken(0.0);
+
+    /**
+     * jsonChars配列の初期サイズ。
+     * これを超えるトークンが出現した場合はサイズを2倍に拡張する。
+     */
+    private static final int MINIMUM_CAPACITY = 128;
+
+    /**
+     * パースするJSON文字列
+     */
+    private final char[] jsonChars;
+    /**
+     * 現在読んでいる文字のインデックス
+     */
+    private int charIndex;
+    /**
+     * パースするJSON文字列の文字数
+     */
+    private final int jsonCharsLength;
+    /**
+     * 行数。改行文字が出てくるたびにインクリメントされる。
+     */
+    private int lineNumber = 1;
 
     /**
      * the next character
      */
     private char nextChar = ' ';
+
+    /**
+     * トークンのパース時に使用されるバッファ
+     */
+    private char[] parsedTokonBuffer;
+    /**
+     * {@code parsedTokonBuffer}の最後尾のインデックス
+     */
+    private int bufferIndex;
+    /**
+     * {@code parsedTokonBuffer}の容量
+     */
+    private int bufferLength = MINIMUM_CAPACITY;
 }
