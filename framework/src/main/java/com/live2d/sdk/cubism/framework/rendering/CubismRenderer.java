@@ -83,15 +83,6 @@ public abstract class CubismRenderer {
         public float a = 1.0f;
     }
 
-    /**
-     * Create a renderer instance.
-     *
-     * @return renderer instance
-     */
-    public static CubismRenderer create() {
-        return null;
-    }
-
     public static void delete() {
 
     }

@@ -52,6 +52,10 @@ Provides functions for applying transformation manipulations due to physics to t
 
 Provides a renderer that implements graphics instructions for drawing the model on various platforms.
 
+### type
+
+Provides classes that are defined from the basic types used within this framework.
+
 ### utils
 
 Provides utility functions such as JSON parser and log output.

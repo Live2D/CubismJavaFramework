@@ -8,7 +8,7 @@
 package com.live2d.sdk.cubism.framework.rendering.android;
 
 import com.live2d.sdk.cubism.framework.math.CubismMatrix44;
-import com.live2d.sdk.cubism.framework.math.CubismRectangle;
+import com.live2d.sdk.cubism.framework.type.csmRectF;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -75,11 +75,11 @@ class CubismClippingContext {
     /**
      * マスク用チャンネルのどの領域にマスクを入れるか(View座標-1..1, UVは0..1に直す)
      */
-    public final CubismRectangle layoutBounds = CubismRectangle.create();
+    public final csmRectF layoutBounds = csmRectF.create();
     /**
      * このクリッピングで、クリッピングされる全ての描画オブジェクトの囲み矩形（毎回更新）
      */
-    public final CubismRectangle allClippedDrawRect = CubismRectangle.create();
+    public final csmRectF allClippedDrawRect = csmRectF.create();
     /**
      * マスクの位置計算結果を保持する行列
      */

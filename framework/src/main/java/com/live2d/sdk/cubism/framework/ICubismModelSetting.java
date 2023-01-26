@@ -140,8 +140,6 @@ public interface ICubismModelSetting {
      */
     int getMotionCount(final String groupName);
 
-    Map<CubismJsonString, ACubismJsonValue> getMotionMap();
-
     /**
      * Get the name of the motion file from group name and index value.
      *
@@ -190,7 +188,7 @@ public interface ICubismModelSetting {
      *
      * @return if layout information exists, return true
      */
-    boolean getLayoutMap(Map<CubismJsonString, Float> outLayoutMap);
+    boolean getLayoutMap(Map<String, Float> outLayoutMap);
 
     /**
      * Get the number of parameters associated to eye blink.

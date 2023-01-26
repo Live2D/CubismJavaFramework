@@ -16,7 +16,6 @@ import com.live2d.sdk.cubism.framework.math.CubismTargetPoint;
 import com.live2d.sdk.cubism.framework.motion.*;
 import com.live2d.sdk.cubism.framework.physics.CubismPhysics;
 import com.live2d.sdk.cubism.framework.rendering.CubismRenderer;
-import com.live2d.sdk.cubism.framework.rendering.android.CubismRendererAndroid;
 
 import static com.live2d.sdk.cubism.framework.CubismFramework.VERTEX_OFFSET;
 import static com.live2d.sdk.cubism.framework.CubismFramework.VERTEX_STEP;
@@ -99,34 +98,31 @@ public abstract class CubismUserModel {
     }
 
     /**
-     * Creates and initializes a renderer. The default number of mask buffers is 1.
+     * 生成されたレンダラーを受け取って初期化する。<br>
+     * このメソッドを使用した場合、クリッピングマスクの描画に使われるバッファのデフォルト枚数は1枚となる。
      *
-     * @param type renderer type
-     * @throws IllegalArgumentException Thrown when an undefined renderer type is given.
+     * @note 引数にnullが与えられた場合`NullPointerException`が投げられる。
+     *
+     * @param renderer CubismRendererを継承したレンダラークラスのインスタンス
      */
-    public void createRenderer(final RendererType type) {
-        createRenderer(type, 1);
+    public void setupRenderer(CubismRenderer renderer) {
+        setupRenderer(renderer,1);
     }
 
     /**
-     * Creates and initializes a renderer.<br>
-     * Please use this method if you would like to set the number of mask buffers other than default of 1.
+     * 生成されたレンダラーを受け取って初期化する。<br>
+     * クリッピングマスクの描画に使うバッファの枚数をデフォルトの1枚より増やしたい場合は、このメソッドを使用する。
      *
-     * @param type renderer type
-     * @param maskBufferCount number of mask buffers to be generated
-     * @throws IllegalArgumentException thrown when an undefined renderer type is given.
+     * @note 第1引数にnullが与えられた場合`NullPointerException`が投げられる。
+     *
+     * @param renderer CubismRendererを継承したレンダラークラスのインスタンス
+     * @param maskBufferCount 生成したいマスクバッファの枚数
      */
-    public void createRenderer(RendererType type, int maskBufferCount) {
-        switch (type) {
-            case ANDROID:
-                renderer = CubismRendererAndroid.create();
-                break;
-            default:
-                throw new IllegalArgumentException("Given renderer type does not exist.");
-        }
+    public void setupRenderer(CubismRenderer renderer, int maskBufferCount) {
+        this.renderer = renderer;
 
         // Bind a renderer with a model instance
-        renderer.initialize(model, maskBufferCount);
+        this.renderer.initialize(model, maskBufferCount);
     }
 
     /**
@@ -249,10 +245,6 @@ public abstract class CubismUserModel {
      */
     public <T> T getRenderer() {
         return (T) renderer;
-    }
-
-    protected enum RendererType {
-        ANDROID,
     }
 
     /**

@@ -10,9 +10,9 @@ package com.live2d.sdk.cubism.framework;
 import com.live2d.sdk.cubism.core.CubismCoreVersion;
 import com.live2d.sdk.cubism.core.ICubismLogger;
 import com.live2d.sdk.cubism.core.Live2DCubismCore;
+import com.live2d.sdk.cubism.framework.CubismFrameworkConfig.LogLevel;
 import com.live2d.sdk.cubism.framework.id.CubismIdManager;
 import com.live2d.sdk.cubism.framework.rendering.android.CubismRendererAndroid;
-import com.live2d.sdk.cubism.framework.utils.CubismDebug;
 
 import java.util.Locale;
 
@@ -29,46 +29,6 @@ public class CubismFramework {
      * Inner class that define optional elements to be set in CubismFramework.
      */
     public static class Option {
-        /**
-         * Log output level
-         */
-        public enum LogLevel {
-            /**
-             * Detailed log
-             */
-            VERBOSE(0),
-            /**
-             * Debug log
-             */
-            DEBUG(1),
-            /**
-             * Info log
-             */
-            INFO(2),
-            /**
-             * Warning log
-             */
-            WARNING(3),
-            /**
-             * Error log
-             */
-            ERROR(4),
-            /**
-             * Log output disabled.
-             */
-            OFF(5);
-
-            private final int id;
-
-            LogLevel(final int id) {
-                this.id = id;
-            }
-
-            public int getId() {
-                return id;
-            }
-        }
-
         /**
          * Set the log output function.
          *
@@ -101,20 +61,6 @@ public class CubismFramework {
      */
     public static final int VERTEX_STEP = 2;
 
-    /**
-     * The default logging level used in CubismFramework.
-     * <p>
-     * Activate this constant when forcibly changing the log output level.
-     * Select LogLevel.VERBOSE to LogLevel.OFF in this CubismFramework class's internal class "Option".
-     * </p>
-     */
-    public static final Option.LogLevel CSM_LOG_LEVEL = Option.LogLevel.VERBOSE;
-
-    /**
-     * Enable/Disable debugging in this Framework.
-     */
-    public static final boolean CSM_DEBUG = true;
-
 
     /**
      * Enable Cubism Framework API.
@@ -142,7 +88,7 @@ public class CubismFramework {
         // Display the version information of Live2D Cubism Core.
         final CubismCoreVersion version = Live2DCubismCore.getVersion();
 
-        CubismDebug.cubismLogInfo(String.format(Locale.US, "Live2D Cubism Core version: %02d.%02d.%04d (%d)", version.getMajor(), version.getMinor(), version.getPatch(), version.getVersionNumber()));
+        cubismLogInfo(String.format(Locale.US, "Live2D Cubism Core version: %02d.%02d.%04d (%d)", version.getMajor(), version.getMinor(), version.getPatch(), version.getVersionNumber()));
 
         cubismLogInfo("CubismFramework.startUp() is complete.");
 
@@ -246,11 +192,11 @@ public class CubismFramework {
      *
      * @return the current value of log output level setting
      */
-    public static Option.LogLevel getLoggingLevel() {
+    public static LogLevel getLoggingLevel() {
         if (s_option != null) {
             return s_option.loggingLevel;
         }
-        return Option.LogLevel.OFF;
+        return LogLevel.OFF;
     }
 
     /**

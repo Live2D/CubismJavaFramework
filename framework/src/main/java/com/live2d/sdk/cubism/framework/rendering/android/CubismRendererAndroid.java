@@ -22,7 +22,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static android.opengl.GLES20.*;
-import static com.live2d.sdk.cubism.framework.CubismFramework.CSM_DEBUG;
+import static com.live2d.sdk.cubism.framework.CubismFrameworkConfig.CSM_DEBUG;
 
 /**
  * The class that implements drawing instructions for Android.
@@ -102,7 +102,7 @@ public class CubismRendererAndroid extends CubismRenderer {
             clippingManager.close();
         }
 
-        if(offscreenFrameBuffers != null) {
+        if (offscreenFrameBuffers != null) {
             for (int i = 0; i < offscreenFrameBuffers.length; i++) {
                 offscreenFrameBuffers[i].destroyOffscreenFrame();
             }
@@ -154,6 +154,10 @@ public class CubismRendererAndroid extends CubismRenderer {
      * @param height height of MaskBufferSize
      */
     public void setClippingMaskBufferSize(final float width, final float height) {
+        if (clippingManager == null) {
+            return;
+        }
+
         // インスタンス破棄前にレンダーテクスチャの数を保存
         final int renderTextureCount = this.clippingManager.getRenderTextureCount();
 

@@ -22,8 +22,8 @@ class CubismJsonBoolean extends ACubismJsonValue {
     }
 
     @Override
-    public String getString() {
-        return String.valueOf(value);
+    public String getString(String defaultValue, String indent) {
+        return stringBuffer;
     }
 
     @Override
@@ -63,6 +63,7 @@ class CubismJsonBoolean extends ACubismJsonValue {
      */
     private CubismJsonBoolean(boolean value) {
         this.value = value;
+        stringBuffer = String.valueOf(value);
     }
 
     /**

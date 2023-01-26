@@ -48,35 +48,12 @@ class CubismJsonObject extends ACubismJsonValue {
     }
 
     @Override
-    public String getString() {
-        StringBuilder builder = new StringBuilder("{\n");
-
-        for (int i = 0; i < keys.size(); i++) {
-            CubismJsonString key = keys.get(i);
-            ACubismJsonValue value = this.value.get(key);
-
-            assert value != null;
-
-            builder.append(key);
-            builder.append(" : ");
-            builder.append(value.getString());
-            builder.append("\n");
-        }
-
-        builder.append("}\n");
-
-        stringBuffer = builder.toString();
-        return stringBuffer;
-    }
-
-    @Override
-    public String getString(String defaultValue) {
-        return getString(defaultValue, "");
-    }
-
-    @Override
     public String getString(String defaultValue, String indent) {
-        StringBuilder builder = new StringBuilder(indent + "{\n");
+        // バッファをクリアする
+        bufferForGetString.delete(0, bufferForGetString.length());
+
+        bufferForGetString.append(indent);
+        bufferForGetString.append("{\n");
 
         for (int i = 0; i < keys.size(); i++) {
             CubismJsonString key = keys.get(i);
@@ -84,18 +61,18 @@ class CubismJsonObject extends ACubismJsonValue {
 
             assert value != null;
 
-            builder.append(indent);
-            builder.append(" ");
-            builder.append(key);
-            builder.append(" : ");
-            builder.append(value.getString(indent + " "));
-            builder.append("\n");
+            bufferForGetString.append(indent);
+            bufferForGetString.append(" ");
+            bufferForGetString.append(key);
+            bufferForGetString.append(" : ");
+            bufferForGetString.append(value.getString(indent + " "));
+            bufferForGetString.append("\n");
         }
 
-        builder.append(indent);
-        builder.append("}\n");
+        bufferForGetString.append(indent);
+        bufferForGetString.append("}\n");
 
-        stringBuffer = builder.toString();
+        stringBuffer = bufferForGetString.toString();
         return stringBuffer;
     }
 
@@ -139,6 +116,11 @@ class CubismJsonObject extends ACubismJsonValue {
     }
 
     /**
+     * {@code getString}メソッドで使われる一時的な文字列バッファの最小容量。
+     */
+    private static final int MINIMUM_CAPACITY = 128;
+
+    /**
      * JSON Object value(map of JSON String and JSON Value)
      */
     private final Map<CubismJsonString, ACubismJsonValue> value = new HashMap<CubismJsonString, ACubismJsonValue>();
@@ -146,4 +128,9 @@ class CubismJsonObject extends ACubismJsonValue {
      * List of keys to speed up access to the specified index
      */
     private final List<CubismJsonString> keys = new ArrayList<CubismJsonString>();
+
+    /**
+     * {@code getString}で使用される文字列バッファ
+     */
+    private final StringBuffer bufferForGetString = new StringBuffer(MINIMUM_CAPACITY);
 }
