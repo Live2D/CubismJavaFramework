@@ -8,6 +8,7 @@
 package com.live2d.sdk.cubism.framework.model;
 
 import com.live2d.sdk.cubism.core.Live2DCubismCore;
+import com.live2d.sdk.cubism.framework.utils.CubismDebug;
 
 import java.text.ParseException;
 
@@ -48,6 +49,18 @@ public class CubismMoc {
      */
     public static int getLatestMocVersion() {
         return Live2DCubismCore.getLatestMocVersion();
+    }
+
+    /**
+     * .moc3ファイルがロードされたメモリを参照し、フォーマットが正しいかチェックする。（不正なファイルかどうかのチェック）
+     * Native CoreのcsmHasMocConsistencyに対応する。
+     *
+     * @param mocBytes .moc3が読まれたデータ配列
+     *
+     * @return .moc3が有効なデータであるかどうか。有効なデータならtrue
+     */
+    public static boolean hasMocConsistency(byte[] mocBytes) {
+        return Live2DCubismCore.hasMocConsistency(mocBytes);
     }
 
     /**
@@ -104,7 +117,6 @@ public class CubismMoc {
     public int getMocVersion() {
         return mocVersion;
     }
-
 
     /**
      * private constructor
