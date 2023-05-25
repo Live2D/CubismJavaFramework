@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [4-r.1] - 2023-05-25
+
+### Added
+
+* Add some functions for checking consistency of MOC3 files.
+  * Add the function of checking consistency in `CubismMoc.create()`.
+  * Add the function of checking consistency before loading a model. (`CubismUserModel.loadModel()`)
+* Add some functions to change Multiply and Screen colors on a per part basis.
+
+### Changed
+
+* Change access modifiers for methods in `CubismExpressionMotion`. And also chenge it to non-final class, allowing it to be extended by inheritance.
+* Change to get opacity according to the current time of the motion.
+
+### Fixed
+* Refactor codes of cacheing vertex information in renderer.
+  * This change does not affect the behavior of this SDK.
+* Fix a crash when specifying the number of mask buffers as an integer less than or equal to 0 in the second argument of `setupRenderer` function in `CubismUserModel`.
+* Fix the redundant process regarding the renderer to make the code more concise.
+* Optimize a drawing process of clipping masks.
+  * `CubismClippingManagerAndroid` class has a flag to indicate whether mask textures have been cleared or not, and the texture clearing process is only called if they have not been cleared.
+
 ## [4-r.1-beta.4] - 2023-03-16
 
 ### Fixed
@@ -73,7 +95,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 * New released!
 
-
+[4-r.1]: https://github.com/Live2D/CubismJavaFramework/compare/4-r.1-beta.4...4-r.1
 [4-r.1-beta.4]: https://github.com/Live2D/CubismJavaFramework/compare/4-r.1-beta.3...4-r.1-beta.4
 [4-r.1-beta.3]: https://github.com/Live2D/CubismJavaFramework/compare/4-r.1-beta.2...4-r.1-beta.3
 [4-r.1-beta.2]: https://github.com/Live2D/CubismJavaFramework/compare/4-r.1-beta.1...4-r.1-beta.2
