@@ -389,6 +389,16 @@ public class CubismModel {
     }
 
     /**
+     * パラメータのIDを取得する。
+     *
+     * @param parameterIndex パラメータのインデックス
+     * @return パラメータのID
+     */
+    public CubismId getParameterId(int parameterIndex) {
+        return CubismFramework.getIdManager().getId(parameterIds.get(parameterIndex));
+    }
+
+    /**
      * Get the number of parameters.
      *
      * @return the number of parameters

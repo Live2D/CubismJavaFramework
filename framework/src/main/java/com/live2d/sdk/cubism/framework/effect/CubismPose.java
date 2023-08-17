@@ -147,7 +147,7 @@ public class CubismPose {
         final CubismId parameterId = CubismFramework.getIdManager().getId(partInfo.get(JsonTag.ID.tag).getString());
 
         final PartData partData = new PartData();
-        partData.partId = new CubismId(parameterId);
+        partData.partId = CubismFramework.getIdManager().getId(parameterId);
 
         ACubismJsonValue link = partInfo.get(JsonTag.LINK.tag);
         if (link != null) {

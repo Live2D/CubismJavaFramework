@@ -19,6 +19,7 @@ import com.live2d.sdk.cubism.framework.id.CubismId;
 import com.live2d.sdk.cubism.framework.math.CubismModelMatrix;
 import com.live2d.sdk.cubism.framework.math.CubismTargetPoint;
 import com.live2d.sdk.cubism.framework.motion.CubismExpressionMotion;
+import com.live2d.sdk.cubism.framework.motion.CubismExpressionMotionManager;
 import com.live2d.sdk.cubism.framework.motion.CubismMotion;
 import com.live2d.sdk.cubism.framework.motion.CubismMotionManager;
 import com.live2d.sdk.cubism.framework.motion.CubismMotionQueueManager;
@@ -392,7 +393,7 @@ public abstract class CubismUserModel {
     /**
      * A expression manager
      */
-    protected CubismMotionManager expressionManager = new CubismMotionManager();
+    protected CubismExpressionMotionManager expressionManager = new CubismExpressionMotionManager();
     /**
      * Auto eye-blink
      */

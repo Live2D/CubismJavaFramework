@@ -126,6 +126,15 @@ public class CubismMotionQueueManager {
     }
 
     /**
+     * CubismMotionQueueEntryのリストを取得する。
+     *
+     * @return CubismMotionQueueEntryのリスト
+     */
+    public List<CubismMotionQueueEntry> getCubismMotionQueueEntries() {
+        return motions;
+    }
+
+    /**
      * Register the callback function to receive events.
      *
      * @param callback callback function
