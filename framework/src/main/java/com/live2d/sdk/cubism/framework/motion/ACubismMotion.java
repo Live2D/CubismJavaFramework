@@ -56,31 +56,42 @@ public abstract class ACubismMotion {
             }
         }
 
-        //---- Fade in/out processing. ----
-        // Easing with a simple sin function.
+        float fadeWeight = updateFadeWeight(motionQueueEntry, userTimeSeconds);
+
+        //---- 全てのパラメータIDをループする ----
+        doUpdateParameters(model, userTimeSeconds, fadeWeight, motionQueueEntry);
+
+        // 後処理
+        // 終了時刻を過ぎたら終了フラグを立てる（CubismMotionQueueManager）
+        if (motionQueueEntry.getEndTime() > 0.0f && motionQueueEntry.getEndTime() < userTimeSeconds) {
+            motionQueueEntry.isFinished(true);      // 終了
+        }
+    }
+
+    /**
+     * モーションフェードのウェイト値を更新する。
+     *
+     * @param motionQueueEntry CubismMotionQueueManagerで管理されているモーション
+     * @param userTimeSeconds デルタ時間の積算値[秒]
+     * @return 更新されたウェイト値
+     */
+    public float updateFadeWeight(CubismMotionQueueEntry motionQueueEntry, float userTimeSeconds) {
+        float fadeWeight = weight;      // 現在の値と掛け合わせる割合
+
+        // ---- フェードイン・アウトの処理 ----
+        // 単純なサイン関数でイージングする。
         final float fadeIn = fadeInSeconds == 0.0f
-                             ? 1.0f
-                             : CubismMath.getEasingSine((userTimeSeconds - motionQueueEntry.getFadeInStartTime()) / fadeInSeconds);
-
+            ? 1.0f
+            : CubismMath.getEasingSine((userTimeSeconds - motionQueueEntry.getFadeInStartTime()) / fadeInSeconds);
         final float fadeOut = (fadeOutSeconds == 0.0f || motionQueueEntry.getEndTime() < 0.0f)
-                              ? 1.0f
-                              : CubismMath.getEasingSine((motionQueueEntry.getEndTime() - userTimeSeconds) / fadeOutSeconds);
-
-        // Percentage to be multiplied by the current value.
-        float fadeWeight = weight * fadeIn * fadeOut;
+            ? 1.0f
+            : CubismMath.getEasingSine((motionQueueEntry.getEndTime() - userTimeSeconds) / fadeOutSeconds);
+        fadeWeight = fadeWeight * fadeIn * fadeOut;
         motionQueueEntry.setState(userTimeSeconds, fadeWeight);
 
         assert (0.0f <= fadeWeight && fadeWeight <= 1.0f);
 
-        //---- Loop through all parameter IDs. ----
-        doUpdateParameters(model, userTimeSeconds, fadeWeight, motionQueueEntry);
-
-        // Post-processing.
-        // Set the end flag when the end time has passed (CubismMotionQueueManager).
-        final float endTime = motionQueueEntry.getEndTime();
-        if ((endTime > 0) && (endTime < userTimeSeconds)) {
-            motionQueueEntry.isFinished(true);      // Termination
-        }
+        return fadeWeight;
     }
 
 

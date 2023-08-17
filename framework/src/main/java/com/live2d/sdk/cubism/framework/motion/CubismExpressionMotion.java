@@ -77,6 +77,16 @@ public class CubismExpressionMotion extends ACubismMotion {
     public static final float DEFAULT_FADE_TIME = 1.0f;
 
     /**
+     * 加算適用の初期値
+     */
+    public static final float DEFAULT_ADDITIVE_VALUE = 0.0f;
+
+    /**
+     * 乗算適用の初期値
+     */
+    public static final float DEFAULT_MULTIPLY_VALUE = 1.0f;
+
+    /**
      * Create an ACubismMotion instance.
      *
      * @param buffer buffer where exp3.json file is loaded
@@ -87,6 +97,134 @@ public class CubismExpressionMotion extends ACubismMotion {
         expression.parse(buffer);
 
         return expression;
+    }
+
+    /**
+     * モデルの表情に関するパラメータを計算する。
+     *
+     * @param model 対象のモデル
+     * @param userTimeSeconds デルタ時間の積算値[秒]
+     * @param motionQueueEntry CubismMotionQueueManagerで管理されているモーション
+     * @param expressionParameterValues モデルに適用する各パラメータの値
+     * @param expressionIndex 表情のインデックス
+     */
+    public void calculateExpressionParameters(
+        CubismModel model,
+        float userTimeSeconds,
+        CubismMotionQueueEntry motionQueueEntry,
+        List<CubismExpressionMotionManager.ExpressionParameterValue> expressionParameterValues,
+        int expressionIndex
+    ) {
+        if (!motionQueueEntry.isAvailable()) {
+            return;
+        }
+
+        if (!motionQueueEntry.isStarted()) {
+            motionQueueEntry.isStarted(true);
+            motionQueueEntry.setStartTime(userTimeSeconds - offsetSeconds);     // モーションの開始時刻を記録
+            motionQueueEntry.setFadeInStartTime(userTimeSeconds);   // フェードインの開始時刻
+
+            final float duration = getDuration();
+
+            if (motionQueueEntry.getEndTime() < 0.0f) {
+                // 開始していないうちに終了設定している場合がある。
+                float endTime = duration <= 0.0f
+                    ? -1
+                    : motionQueueEntry.getStartTime() + duration;
+                motionQueueEntry.setEndTime(endTime);
+                // duration == -1 の場合はループする。
+            }
+        }
+
+        fadeWeight = updateFadeWeight(motionQueueEntry, userTimeSeconds);
+
+        // モデルに適用する値を計算
+        for (int i = 0; i < expressionParameterValues.size(); i++) {
+            CubismExpressionMotionManager.ExpressionParameterValue expParamValue = expressionParameterValues.get(i);
+
+            if (expParamValue.parameterId == null) {
+                continue;
+            }
+
+            final float currentParameterValue = expParamValue.overwriteValue = model.getParameterValue(expParamValue.parameterId);
+
+            List<ExpressionParameter> expressionParameters = getExpressionParameters();
+            int parameterIndex = -1;
+            for (int j = 0; j < expressionParameters.size(); j++) {
+                if (expParamValue.parameterId != expressionParameters.get(j).parameterId) {
+                    continue;
+                }
+
+                parameterIndex = j;
+                break;
+            }
+
+            // 再生中のExpressionが参照していないパラメータは初期値を適用
+            if (parameterIndex < 0) {
+                if (expressionIndex == 0) {
+                    expParamValue.additiveValue = DEFAULT_ADDITIVE_VALUE;
+                    expParamValue.multiplyValue = DEFAULT_MULTIPLY_VALUE;
+                    expParamValue.overwriteValue = currentParameterValue;
+                } else {
+                    expParamValue.additiveValue = calculateValue(expParamValue.additiveValue, DEFAULT_ADDITIVE_VALUE);
+                    expParamValue.multiplyValue = calculateValue(expParamValue.multiplyValue, DEFAULT_MULTIPLY_VALUE);
+                    expParamValue.overwriteValue = calculateValue(expParamValue.overwriteValue, currentParameterValue);
+                }
+                continue;
+            }
+
+            // 値を計算
+            float value = expressionParameters.get(parameterIndex).value;
+            float newAdditiveValue, newMultiplyValue, newOverwriteValue;
+
+            switch (expressionParameters.get(parameterIndex).blendType) {
+                case ADD:
+                    newAdditiveValue = value;
+                    newMultiplyValue = DEFAULT_MULTIPLY_VALUE;
+                    newOverwriteValue = currentParameterValue;
+                    break;
+                case MULTIPLY:
+                    newAdditiveValue = DEFAULT_ADDITIVE_VALUE;
+                    newMultiplyValue = value;
+                    newOverwriteValue = currentParameterValue;
+                    break;
+                case OVERWRITE:
+                    newAdditiveValue = DEFAULT_ADDITIVE_VALUE;
+                    newMultiplyValue = DEFAULT_MULTIPLY_VALUE;
+                    newOverwriteValue = value;
+                    break;
+                default:
+                    return;
+            }
+
+            if (expressionIndex == 0) {
+                expParamValue.additiveValue = newAdditiveValue;
+                expParamValue.multiplyValue = newMultiplyValue;
+                expParamValue.overwriteValue = newOverwriteValue;
+            } else {
+                expParamValue.additiveValue = (expParamValue.additiveValue * (1.0f - fadeWeight)) + newAdditiveValue * fadeWeight;
+                expParamValue.multiplyValue = (expParamValue.multiplyValue * (1.0f - fadeWeight)) + newMultiplyValue * fadeWeight;
+                expParamValue.overwriteValue = (expParamValue.overwriteValue * (1.0f - fadeWeight)) + newOverwriteValue * fadeWeight;
+            }
+        }
+    }
+
+    /**
+     * 表情が参照しているパラメータを取得する。
+     *
+     * @return 表情が参照しているパラメータ
+     */
+    public List<ExpressionParameter> getExpressionParameters() {
+        return parameters;
+    }
+
+    /**
+     * 現在の表情のフェードのウェイト値を取得する。
+     *
+     * @return 表情のフェードのウェイト値
+     */
+    public float getFadeWeight() {
+        return fadeWeight;
     }
 
     /**
@@ -193,7 +331,24 @@ public class CubismExpressionMotion extends ACubismMotion {
     }
 
     /**
+     * 入力された値でブレンド計算をする。
+     *
+     * @param source 現在の値
+     * @param destination 適用する値
+     *
+     * @return 計算されたブレンド値
+     */
+    private float calculateValue(float source, float destination) {
+        return (source * (1.0f - fadeWeight)) + (destination * fadeWeight);
+    }
+
+    /**
      * Parameter information list for facial expressions
      */
-    protected final List<ExpressionParameter> parameters = new ArrayList<ExpressionParameter>();
+    private final List<ExpressionParameter> parameters = new ArrayList<>();
+
+    /**
+     * 表情の現在のウェイト
+     */
+    private float fadeWeight;
 }

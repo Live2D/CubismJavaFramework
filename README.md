@@ -4,17 +4,25 @@
 
 # Cubism Java Framework
 
-This is a framework for using models output by Live2D Cubism 4 Editor in applications.
+This is a framework for using models output by Live2D Cubism Editor in applications.
 
 It provides various functions for displaying and manipulating the model. It is used in conjunction with the Cubism Core library to load the model.
 
 ## Supported Java Versions
 
-This framework can be compiled with **Java SE 6** or higher.
+This framework can be compiled with **Java SE 7** or higher.
 
 ## License
 
 Please check the [license](LICENSE.md) before using the framework.
+
+
+## Compatibility with Cubism 5 new features and previous Cubism SDK versions
+
+This SDK is compatible with Cubism 5.
+For SDK compatibility with new features in Cubism 5 Editor, please refer to [here](https://docs.live2d.com/en/cubism-sdk-manual/cubism-5-new-functions/).
+For compatibility with previous versions of Cubism SDK, please refer to [here](https://docs.live2d.com/en/cubism-sdk-manual/compatibility-with-cubism-5/).
+
 
 ## Components
 
