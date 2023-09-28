@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [5-r.1-beta.2] - 2023-09-28
+
+### Added
+
+* Add final modifier to some private fields in `CubismModel`.
+
+### Changed
+
+* Change getter functions to get some data without `getIdManager` in `CubismModel`.
+* Change some private fields in `CubismModel` to `final` variable.
+
+
 ## [5-r.1-beta.1] - 2023-08-17
 
 ### Added
@@ -122,6 +134,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 * New released!
 
+[5-r.1-beta.2]: https://github.com/Live2D/CubismJavaFramework/compare/5-r.1-beta.1...5-r.1-beta.2
 [5-r.1-beta.1]: https://github.com/Live2D/CubismJavaFramework/compare/4-r.1...5-r.1-beta.1
 [4-r.1]: https://github.com/Live2D/CubismJavaFramework/compare/4-r.1-beta.4...4-r.1
 [4-r.1-beta.4]: https://github.com/Live2D/CubismJavaFramework/compare/4-r.1-beta.3...4-r.1-beta.4
