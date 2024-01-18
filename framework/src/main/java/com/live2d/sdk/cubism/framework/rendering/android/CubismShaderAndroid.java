@@ -167,11 +167,11 @@ class CubismShaderAndroid {
             );
 
             // Set used color channel.
-            final int channelNumber = renderer.getClippingContextBufferForDraw().layoutChannelNo;
+            final int channelIndex = renderer.getClippingContextBufferForDraw().layoutChannelIndex;
             CubismRenderer.CubismTextureColor colorChannel = renderer
                 .getClippingContextBufferForDraw()
                 .getClippingManager()
-                .getChannelFlagAsColor(channelNumber);
+                .getChannelFlagAsColor(channelIndex);
             glUniform4f(
                 shaderSet.uniformChannelFlagLocation,
                 colorChannel.r,
@@ -290,11 +290,11 @@ class CubismShaderAndroid {
         );
 
         // channels
-        final int channelNumber = renderer.getClippingContextBufferForMask().layoutChannelNo;
+        final int channelIndex = renderer.getClippingContextBufferForMask().layoutChannelIndex;
         CubismRenderer.CubismTextureColor colorChannel = renderer
             .getClippingContextBufferForMask()
             .getClippingManager()
-            .getChannelFlagAsColor(channelNumber);
+            .getChannelFlagAsColor(channelIndex);
 
         glUniform4f(
             shaderSet.uniformChannelFlagLocation,

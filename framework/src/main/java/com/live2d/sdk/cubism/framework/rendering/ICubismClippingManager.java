@@ -96,8 +96,8 @@ public interface ICubismClippingManager {
     /**
      * カラーチャンネル（RGBA）のフラグを取得する。
      *
-     * @param channelNo カラーチャンネル（RGBA）の番号（0:R, 1:G, 2:B, 3:A）
+     * @param channelIndex カラーチャンネル（RGBA）の番号（0:R, 1:G, 2:B, 3:A）
      * @return カラーチャンネルのフラグ
      */
-    CubismRenderer.CubismTextureColor getChannelFlagAsColor(int channelNo);
+    CubismRenderer.CubismTextureColor getChannelFlagAsColor(int channelIndex);
 }

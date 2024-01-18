@@ -327,7 +327,12 @@ public abstract class CubismUserModel {
         byte[] buffer,
         IFinishedMotionCallback onFinishedMotionHandler
     ) {
-        return CubismMotion.create(buffer, onFinishedMotionHandler);
+        try {
+            return CubismMotion.create(buffer, onFinishedMotionHandler);
+        } catch (Exception e) {
+            cubismLogError("Failed to loadMotion(). %s", e.getMessage());
+            return null;
+        }
     }
 
     /**
@@ -337,7 +342,7 @@ public abstract class CubismUserModel {
      * @return motion class
      */
     protected CubismMotion loadMotion(byte[] buffer) {
-        return CubismMotion.create(buffer, null);
+        return loadMotion(buffer, null);
     }
 
     /**
@@ -347,7 +352,12 @@ public abstract class CubismUserModel {
      * @return motion class
      */
     protected CubismExpressionMotion loadExpression(final byte[] buffer) {
-        return CubismExpressionMotion.create(buffer);
+        try {
+            return CubismExpressionMotion.create(buffer);
+        } catch (Exception e) {
+            cubismLogError("Failed to loadExpressionMotion(). %s", e.getMessage());
+            return null;
+        }
     }
 
     /**
@@ -356,7 +366,11 @@ public abstract class CubismUserModel {
      * @param buffer a buffer where pose3.json is loaded.
      */
     protected void loadPose(final byte[] buffer) {
-        pose = CubismPose.create(buffer);
+        try {
+            pose = CubismPose.create(buffer);
+        } catch (Exception e) {
+            cubismLogError("Failed to loadPose(). %s", e.getMessage());
+        }
     }
 
     /**
@@ -365,7 +379,11 @@ public abstract class CubismUserModel {
      * @param buffer a buffer where physics3.json is loaded.
      */
     protected void loadPhysics(final byte[] buffer) {
-        physics = CubismPhysics.create(buffer);
+        try {
+            physics = CubismPhysics.create(buffer);
+        } catch (Exception e) {
+            cubismLogError("Failed to loadPhysics(). %s", e.getMessage());
+        }
     }
 
     /**
@@ -374,7 +392,11 @@ public abstract class CubismUserModel {
      * @param buffer a buffer where userdata3.json is loaded.
      */
     protected void loadUserData(final byte[] buffer) {
-        modelUserData = CubismModelUserData.create(buffer);
+        try {
+            modelUserData = CubismModelUserData.create(buffer);
+        } catch (Exception e) {
+            cubismLogError("Failed to loadUserData(). %s", e.getMessage());
+        }
     }
 
     /**
