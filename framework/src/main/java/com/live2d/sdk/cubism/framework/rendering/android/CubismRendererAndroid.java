@@ -123,11 +123,11 @@ public class CubismRendererAndroid extends CubismRenderer {
     /**
      * Bind processing of OpenGL textures.
      *
-     * @param modelTextureNo number of the model texture to set
-     * @param glTextureNo    number of the OpenGL texture to bind
+     * @param modelTextureIndex number of the model texture to set
+     * @param glTextureIndex    number of the OpenGL texture to bind
      */
-    public void bindTexture(int modelTextureNo, int glTextureNo) {
-        textures.put(modelTextureNo, glTextureNo);
+    public void bindTexture(int modelTextureIndex, int glTextureIndex) {
+        textures.put(modelTextureIndex, glTextureIndex);
         areTexturesChanged = true;
     }
 

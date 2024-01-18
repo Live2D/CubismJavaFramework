@@ -257,7 +257,7 @@ public abstract class ACubismClippingManager<
             for (int index = 0; index < clippingContextListForMask.size(); index++) {
                 T_ClippingContext cc = clippingContextListForMask.get(index);
 
-                cc.layoutChannelNo = 0;   // どうせ毎回消すので固定で良い
+                cc.layoutChannelIndex = 0;   // どうせ毎回消すので固定で良い
                 cc.layoutBounds.setX(0.0f);
                 cc.layoutBounds.setY(0.0f);
                 cc.layoutBounds.setWidth(1.0f);
@@ -272,25 +272,31 @@ public abstract class ACubismClippingManager<
 
         // ひとつのRenderTextureを極力いっぱいに使ってマスクをレイアウトする。
         // マスクグループの数が4以下ならRGBA各チャンネルに１つずつマスクを配置し、5以上6以下ならRGBAを2,2,1,1と配置する。
-        int countPerSheetDiv = usingClipCount / renderTextureCount;     // レンダーテクスチャ1枚あたり何枚割り当てるか
-        int countPerSheetMod = usingClipCount % renderTextureCount;     // この番号のレンダーテクスチャまでに1つずつ配分する。
+        // NOTE: 1枚に割り当てるマスクの分割数を取りたいため、小数点は切り上げる。
+        final int countPerSheetDiv = (usingClipCount + renderTextureCount - 1) / renderTextureCount;     // レンダーテクスチャ1枚あたり何枚割り当てるか
+        final int reduceLayoutTextureCount = usingClipCount % renderTextureCount;     // レイアウトの数を1枚減らすレンダーテクスチャの数（この数だけのレンダーテクスチャが対象）。
 
         // RGBAを順番に使っていく。
-        final int div = countPerSheetDiv / COLOR_CHANNEL_COUNT;     // 1チャンネルに配置する基本のマスク個数
-        final int mod = countPerSheetDiv % COLOR_CHANNEL_COUNT;     // 余り、この番号のチャンネルまでに1つずつ配分する
+        final int divCount = countPerSheetDiv / COLOR_CHANNEL_COUNT;     // 1チャンネルに配置する基本のマスク個数
+        final int modCount = countPerSheetDiv % COLOR_CHANNEL_COUNT;     // 余り、この番号のチャンネルまでに1つずつ配分する（インデックスではない）
 
         // RGBAそれぞれのチャンネルを用意していく(0:R , 1:G , 2:B, 3:A, )
         int curClipIndex = 0;   // 順番に設定していく
 
-        for (int renderTextureNo = 0; renderTextureNo < renderTextureCount; renderTextureNo++) {
-            for (int channelNo = 0; channelNo < COLOR_CHANNEL_COUNT; channelNo++) {
+        for (int renderTextureIndex = 0; renderTextureIndex < renderTextureCount; renderTextureIndex++) {
+            for (int channelIndex = 0; channelIndex < COLOR_CHANNEL_COUNT; channelIndex++) {
                 // このチャンネルにレイアウトする数
-                int layoutCount = div + (channelNo < mod ? 1 : 0);
+                // NOTE: レイアウト数 = 1チャンネルに配置する基本のマスク + 余りのマスクを置くチャンネルなら1つ追加
+                int layoutCount = divCount + (channelIndex < modCount ? 1 : 0);
 
-                // このレンダーテクスチャにまだ割り当てられていなければ追加する
-                final int checkChannelNo = mod + 1 >= COLOR_CHANNEL_COUNT ? 0 : mod + 1;
-                if (layoutCount < layoutCountMaxValue && channelNo == checkChannelNo) {
-                    layoutCount += renderTextureNo < countPerSheetMod ? 1 : 0;
+                // レイアウトの数を1枚減らす場合にそれを行うチャンネルを決定
+                // divが0の時は正常なインデックスの範囲になるように調整
+                final int checkChannelIndex = modCount + (divCount < 1 ? -1 : 0);
+
+                // 今回が対象のチャンネルかつ、レイアウトの数を1枚減らすレンダーテクスチャが存在する場合
+                if (channelIndex == checkChannelIndex && reduceLayoutTextureCount > 0) {
+                    // 現在のレンダーテクスチャが、対象のレンダーテクスチャであればレイアウトの数を1枚減らす。
+                    layoutCount -= !(renderTextureIndex < reduceLayoutTextureCount) ? 1 : 0;
                 }
 
                 // 分割方法を決定する。
@@ -299,7 +305,7 @@ public abstract class ACubismClippingManager<
                 } else if (layoutCount == 1) {
                     // 全てをそのまま使う。
                     T_ClippingContext cc = clippingContextListForMask.get(curClipIndex++);
-                    cc.layoutChannelNo = channelNo;
+                    cc.layoutChannelIndex = channelIndex;
                     csmRectF bounds = cc.layoutBounds;
 
                     bounds.setX(0.0f);
@@ -307,13 +313,13 @@ public abstract class ACubismClippingManager<
                     bounds.setWidth(1.0f);
                     bounds.setHeight(1.0f);
 
-                    cc.bufferIndex = renderTextureNo;
+                    cc.bufferIndex = renderTextureIndex;
                 } else if (layoutCount == 2) {
                     for (int i = 0; i < layoutCount; i++) {
                         final int xpos = i % 2;
 
                         T_ClippingContext cc = clippingContextListForMask.get(curClipIndex++);
-                        cc.layoutChannelNo = channelNo;
+                        cc.layoutChannelIndex = channelIndex;
                         csmRectF bounds = cc.layoutBounds;
 
                         // UVを2つに分解して使う
@@ -322,7 +328,7 @@ public abstract class ACubismClippingManager<
                         bounds.setWidth(0.5f);
                         bounds.setHeight(1.0f);
 
-                        cc.bufferIndex = renderTextureNo;
+                        cc.bufferIndex = renderTextureIndex;
                     }
                 } else if (layoutCount <= 4) {
                     // 4分割して使う
@@ -331,7 +337,7 @@ public abstract class ACubismClippingManager<
                         final int ypos = i / 2;
 
                         T_ClippingContext cc = clippingContextListForMask.get(curClipIndex++);
-                        cc.layoutChannelNo = channelNo;
+                        cc.layoutChannelIndex = channelIndex;
                         csmRectF bounds = cc.layoutBounds;
 
                         bounds.setX(xpos * 0.5f);
@@ -339,7 +345,7 @@ public abstract class ACubismClippingManager<
                         bounds.setWidth(0.5f);
                         bounds.setHeight(0.5f);
 
-                        cc.bufferIndex = renderTextureNo;
+                        cc.bufferIndex = renderTextureIndex;
                     }
                 } else if (layoutCount <= layoutCountMaxValue) {
                     // 9分割して使う
@@ -348,7 +354,7 @@ public abstract class ACubismClippingManager<
                         final int ypos = i / 3;
 
                         T_ClippingContext cc = clippingContextListForMask.get(curClipIndex++);
-                        cc.layoutChannelNo = channelNo;
+                        cc.layoutChannelIndex = channelIndex;
                         csmRectF bounds = cc.layoutBounds;
 
                         bounds.setX(xpos / 3.0f);
@@ -356,7 +362,7 @@ public abstract class ACubismClippingManager<
                         bounds.setWidth(1.0f / 3.0f);
                         bounds.setHeight(1.0f / 3.0f);
 
-                        cc.bufferIndex = renderTextureNo;
+                        cc.bufferIndex = renderTextureIndex;
                     }
                 }
                 // マスクの制限枚数を超えた場合の処理
@@ -376,7 +382,7 @@ public abstract class ACubismClippingManager<
                     // もちろん描画結果はろくなことにならない。
                     for (int i = 0; i < layoutCount; i++) {
                         T_ClippingContext cc = clippingContextListForMask.get(curClipIndex++);
-                        cc.layoutChannelNo = 0;
+                        cc.layoutChannelIndex = 0;
 
                         csmRectF bounds = cc.layoutBounds;
                         bounds.setX(0.0f);
@@ -407,8 +413,8 @@ public abstract class ACubismClippingManager<
     }
 
     @Override
-    public CubismRenderer.CubismTextureColor getChannelFlagAsColor(int channelNo) {
-        return channelColors.get(channelNo);
+    public CubismRenderer.CubismTextureColor getChannelFlagAsColor(int channelIndex) {
+        return channelColors.get(channelIndex);
     }
 
     /**

@@ -102,7 +102,7 @@ public abstract class ACubismClippingContext {
     /**
      * RGBAのいずれのチャンネルにこのクリップを配置するか（0:R, 1:G, 2:B, 3:A）
      */
-    public int layoutChannelNo;
+    public int layoutChannelIndex;
 
     /**
      * マスク用チャンネルのどの領域にマスクを入れるか(View座標-1..1, UVは0..1に直す)

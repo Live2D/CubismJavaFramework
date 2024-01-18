@@ -4,7 +4,7 @@ plugins {
 
 android {
     namespace = "com.live2d.sdk.cubism.framework"
-    compileSdkVersion PROP_COMPILE_SDK_VERSION.toInteger()
+    compileSdk PROP_COMPILE_SDK_VERSION.toInteger()
 
     defaultConfig {
         minSdkVersion PROP_MIN_SDK_VERSION
