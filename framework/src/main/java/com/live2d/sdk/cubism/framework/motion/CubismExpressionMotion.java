@@ -107,36 +107,27 @@ public class CubismExpressionMotion extends ACubismMotion {
      * @param motionQueueEntry CubismMotionQueueManagerで管理されているモーション
      * @param expressionParameterValues モデルに適用する各パラメータの値
      * @param expressionIndex 表情のインデックス
+     * @param fadeWeight 表情のウェイト
      */
     public void calculateExpressionParameters(
         CubismModel model,
         float userTimeSeconds,
         CubismMotionQueueEntry motionQueueEntry,
         List<CubismExpressionMotionManager.ExpressionParameterValue> expressionParameterValues,
-        int expressionIndex
+        int expressionIndex,
+        float fadeWeight
     ) {
+        if(motionQueueEntry == null || expressionParameterValues == null) {
+            return;
+        }
+
         if (!motionQueueEntry.isAvailable()) {
             return;
         }
 
-        if (!motionQueueEntry.isStarted()) {
-            motionQueueEntry.isStarted(true);
-            motionQueueEntry.setStartTime(userTimeSeconds - offsetSeconds);     // モーションの開始時刻を記録
-            motionQueueEntry.setFadeInStartTime(userTimeSeconds);   // フェードインの開始時刻
-
-            final float duration = getDuration();
-
-            if (motionQueueEntry.getEndTime() < 0.0f) {
-                // 開始していないうちに終了設定している場合がある。
-                float endTime = duration <= 0.0f
-                    ? -1
-                    : motionQueueEntry.getStartTime() + duration;
-                motionQueueEntry.setEndTime(endTime);
-                // duration == -1 の場合はループする。
-            }
-        }
-
-        fadeWeight = updateFadeWeight(motionQueueEntry, userTimeSeconds);
+        // CubismExpressionMotion.fadeWeight は廃止予定です。
+        // 互換性のために処理は残りますが、実際には使用しておりません。
+        this.fadeWeight = updateFadeWeight(motionQueueEntry, userTimeSeconds);
 
         // モデルに適用する値を計算
         for (int i = 0; i < expressionParameterValues.size(); i++) {
@@ -166,9 +157,9 @@ public class CubismExpressionMotion extends ACubismMotion {
                     expParamValue.multiplyValue = DEFAULT_MULTIPLY_VALUE;
                     expParamValue.overwriteValue = currentParameterValue;
                 } else {
-                    expParamValue.additiveValue = calculateValue(expParamValue.additiveValue, DEFAULT_ADDITIVE_VALUE);
-                    expParamValue.multiplyValue = calculateValue(expParamValue.multiplyValue, DEFAULT_MULTIPLY_VALUE);
-                    expParamValue.overwriteValue = calculateValue(expParamValue.overwriteValue, currentParameterValue);
+                    expParamValue.additiveValue = calculateValue(expParamValue.additiveValue, DEFAULT_ADDITIVE_VALUE, fadeWeight);
+                    expParamValue.multiplyValue = calculateValue(expParamValue.multiplyValue, DEFAULT_MULTIPLY_VALUE, fadeWeight);
+                    expParamValue.overwriteValue = calculateValue(expParamValue.overwriteValue, currentParameterValue, fadeWeight);
                 }
                 continue;
             }
@@ -218,11 +209,17 @@ public class CubismExpressionMotion extends ACubismMotion {
         return parameters;
     }
 
+
     /**
      * 現在の表情のフェードのウェイト値を取得する。
      *
      * @return 表情のフェードのウェイト値
+     *
+     * @deprecated CubismExpressionMotion.fadeWeightが削除予定のため非推奨。
+     * CubismExpressionMotionManager.getFadeWeight(int index) を使用してください。
+     * @see CubismExpressionMotionManager#getFadeWeight(int index)
      */
+    @Deprecated
     public float getFadeWeight() {
         return fadeWeight;
     }
@@ -338,7 +335,7 @@ public class CubismExpressionMotion extends ACubismMotion {
      *
      * @return 計算されたブレンド値
      */
-    private float calculateValue(float source, float destination) {
+    private float calculateValue(float source, float destination, float fadeWeight) {
         return (source * (1.0f - fadeWeight)) + (destination * fadeWeight);
     }
 
@@ -349,6 +346,9 @@ public class CubismExpressionMotion extends ACubismMotion {
 
     /**
      * 表情の現在のウェイト
+     *
+     * @deprecated 不具合を引き起こす要因となるため非推奨。
      */
+    @Deprecated
     private float fadeWeight;
 }

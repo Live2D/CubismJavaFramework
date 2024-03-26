@@ -55,6 +55,27 @@ public class CubismExpressionMotionManager extends CubismMotionQueueManager {
     }
 
     /**
+     * 現在の表情のフェードのウェイト値を取得する。
+     *
+     * @param index 取得する表情モーションのインデックス
+     *
+     * @return 表情のフェードのウェイト値
+     *
+     * @throws IllegalArgumentException if an argument is an invalid value.
+     */
+    public float getFadeWeight(int index) {
+        if(fadeWeights.isEmpty()) {
+            throw new IllegalArgumentException("No motion during playback.");
+        }
+
+        if(fadeWeights.size() <= index || index < 0) {
+            throw new IllegalArgumentException("The index is an invalid value.");
+        }
+
+        return fadeWeights.get(index);
+    }
+
+    /**
      * 予約中の表情モーションの優先度を設定する。
      *
      * @param priority 設定する表情モーションの優先度
@@ -76,7 +97,9 @@ public class CubismExpressionMotionManager extends CubismMotionQueueManager {
         }
         currentPriority = priority;     // 再生中モーションの優先度を設定
 
-        return startMotion(motion, userTimeSeconds);
+        fadeWeights.add(0.0f);
+
+        return startMotion(motion);
     }
 
     /**
@@ -148,12 +171,15 @@ public class CubismExpressionMotionManager extends CubismMotionQueueManager {
             }
 
             // ------ 値を計算する ------
+            expressionMotion.setupMotionQueueEntry(motionQueueEntry, userTimeSeconds);
+            fadeWeights.set(expressionIndex, expressionMotion.updateFadeWeight(motionQueueEntry, userTimeSeconds));
             expressionMotion.calculateExpressionParameters(
                 model,
                 userTimeSeconds,
                 motionQueueEntry,
                 expressionParameterValues,
-                expressionIndex
+                expressionIndex,
+                fadeWeights.get(expressionIndex)
             );
 
             final float easingSine = expressionMotion.getFadeInTime() == 0.0f
@@ -175,11 +201,14 @@ public class CubismExpressionMotionManager extends CubismMotionQueueManager {
         if (motions.size() > 1) {
             CubismExpressionMotion expressionMotion = (CubismExpressionMotion) motions.get(motions.size() - 1).getCubismMotion();
 
-            if (expressionMotion.getFadeWeight() >= 1.0f) {
+            float latestFadeWeight = fadeWeights.get(fadeWeights.size() - 1);
+            if (latestFadeWeight >= 1.0f) {
                 // 配列の最後の要素は削除しない
                 for (int i = motions.size() - 2; i >= 0; i--) {
                     // forでremoveすることはできない。nullをセットしておいて後で削除する。
                     motions.set(i, null);
+
+                    fadeWeights.remove(i);
                 }
                 motions.removeAll(nullSet);
             }
@@ -222,4 +251,9 @@ public class CubismExpressionMotionManager extends CubismMotionQueueManager {
      * 表情モーションファイルを別スレッドで読み込むときの機能。
      */
     private int reservePriority;
+
+    /**
+     * 再生中の表情モーションのウェイトのリスト
+     */
+    private final List<Float> fadeWeights = new ArrayList<>();
 }

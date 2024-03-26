@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [5-r.1] - 2024-03-26
+
+### Added
+
+* Add type constraint to the generics type of `getRenderer` function in `CubismUserModel`.
+* Add function `modF()` to compute floating-point remainder in `CubismMath` class.
+
+### Changed
+
+* Change the default value of the flag for debugging from `true` to `false`.
+* Change to output log if the argument `motionQueueEntry` is `null` in the `updateFadeWeight()` function of the `ACubismMotion` class.
+
+### Deprecated
+
+* Deprecate the `fadeWeight` variable and the `getFadeWeight()` function of the `CubismExpressionMotion` class.
+  * The `fadeWeight` variable of the `CubismExpressionMotion` class can cause problems.
+  * Please use the `getFadeWeight()` function of the `CubismExpressionMotionManager` class with one argument from now on.
+* The `startMotion()` function of the `CubismMotionQueueManager` class with the unnecessary second argument `userTimeSeconds` is deprecated.
+  * Please use the `startMotion()` function with one argument from now on.
+
+### Fixed
+
+* Fix a bug that caused incorrect weight values when expression motions were shared by multiple models.
+  * Change the way fadeWeight is managed for expression motions.
+
+
 ## [5-r.1-beta.3] - 2024-01-18
 
 ### Added
@@ -154,6 +180,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 * New released!
 
+[5-r.1]: https://github.com/Live2D/CubismJavaFramework/compare/5-r.1-beta.3...5-r.1
 [5-r.1-beta.3]: https://github.com/Live2D/CubismJavaFramework/compare/5-r.1-beta.2...5-r.1-beta.3
 [5-r.1-beta.2]: https://github.com/Live2D/CubismJavaFramework/compare/5-r.1-beta.1...5-r.1-beta.2
 [5-r.1-beta.1]: https://github.com/Live2D/CubismJavaFramework/compare/4-r.1...5-r.1-beta.1
