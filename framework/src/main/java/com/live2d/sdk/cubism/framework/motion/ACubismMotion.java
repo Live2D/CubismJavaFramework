@@ -10,6 +10,7 @@ package com.live2d.sdk.cubism.framework.motion;
 import com.live2d.sdk.cubism.framework.id.CubismId;
 import com.live2d.sdk.cubism.framework.math.CubismMath;
 import com.live2d.sdk.cubism.framework.model.CubismModel;
+import com.live2d.sdk.cubism.framework.utils.CubismDebug;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -36,25 +37,7 @@ public abstract class ACubismMotion {
             return;
         }
 
-        if (!motionQueueEntry.isStarted()) {
-            motionQueueEntry.isStarted(true);
-
-            // Record the start time of the motion.
-            motionQueueEntry.setStartTime(userTimeSeconds - offsetSeconds);
-            // Record the start time of fade-in
-            motionQueueEntry.setFadeInStartTime(userTimeSeconds);
-
-            final float duration = getDuration();
-
-            // Deal with the case where the status is set "end" before it has started.
-            if (motionQueueEntry.getEndTime() < 0) {
-                // If duration == -1, loop motion.
-                float endTime = (duration <= 0)
-                                ? -1
-                                : motionQueueEntry.getStartTime() + duration;
-                motionQueueEntry.setEndTime(endTime);
-            }
-        }
+        setupMotionQueueEntry(motionQueueEntry, userTimeSeconds);
 
         float fadeWeight = updateFadeWeight(motionQueueEntry, userTimeSeconds);
 
@@ -69,6 +52,43 @@ public abstract class ACubismMotion {
     }
 
     /**
+     * モーションの再生を開始するためのセットアップを行う。
+     *
+     * @param motionQueueEntry CubismMotionQueueManagerによって管理されるモーション
+     * @param userTimeSeconds 総再生時間（秒）
+     */
+    public void setupMotionQueueEntry(
+        CubismMotionQueueEntry motionQueueEntry,
+        final float userTimeSeconds
+    ) {
+        if (!motionQueueEntry.isAvailable() || motionQueueEntry.isFinished()) {
+            return;
+        }
+
+        if (motionQueueEntry.isStarted()) {
+            return;
+        }
+
+        motionQueueEntry.isStarted(true);
+
+        // Record the start time of the motion.
+        motionQueueEntry.setStartTime(userTimeSeconds - offsetSeconds);
+        // Record the start time of fade-in
+        motionQueueEntry.setFadeInStartTime(userTimeSeconds);
+
+        final float duration = getDuration();
+
+        // Deal with the case where the status is set "end" before it has started.
+        if (motionQueueEntry.getEndTime() < 0) {
+            // If duration == -1, loop motion.
+            float endTime = (duration <= 0)
+                ? -1
+                : motionQueueEntry.getStartTime() + duration;
+            motionQueueEntry.setEndTime(endTime);
+        }
+    }
+
+    /**
      * モーションフェードのウェイト値を更新する。
      *
      * @param motionQueueEntry CubismMotionQueueManagerで管理されているモーション
@@ -76,6 +96,10 @@ public abstract class ACubismMotion {
      * @return 更新されたウェイト値
      */
     public float updateFadeWeight(CubismMotionQueueEntry motionQueueEntry, float userTimeSeconds) {
+        if(motionQueueEntry == null) {
+            CubismDebug.cubismLogError("motionQueueEntry is null.");
+        }
+
         float fadeWeight = weight;      // 現在の値と掛け合わせる割合
 
         // ---- フェードイン・アウトの処理 ----

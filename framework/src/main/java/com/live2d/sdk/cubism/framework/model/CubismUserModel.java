@@ -249,7 +249,7 @@ public abstract class CubismUserModel {
      * @param <T> renderer type to use
      * @return renderer instance
      */
-    public <T> T getRenderer() {
+    public <T extends CubismRenderer> T getRenderer() {
         return (T) renderer;
     }
 
