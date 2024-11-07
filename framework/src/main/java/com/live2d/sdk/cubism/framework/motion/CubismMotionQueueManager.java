@@ -46,6 +46,10 @@ public class CubismMotionQueueManager {
 
         motions.add(motionQueueEntry);
 
+        if (motion.onBeganMotion != null) {
+            motion.onBeganMotion.execute(motion);
+        }
+
         return System.identityHashCode(motionQueueEntry);
     }
 
