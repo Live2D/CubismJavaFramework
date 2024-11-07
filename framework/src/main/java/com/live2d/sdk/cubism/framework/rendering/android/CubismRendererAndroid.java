@@ -444,7 +444,7 @@ public class CubismRendererAndroid extends CubismRenderer {
         glBindBuffer(GL_ARRAY_BUFFER, 0);
 
         // Anisotropic filtering. If it is not supported, do not set it
-        if (getAnisotropy() > 0.0f) {
+        if (getAnisotropy() >= 1.0f) {
             for (Map.Entry<Integer, Integer> entry : textures.entrySet()) {
                 glBindTexture(GL_TEXTURE_2D, entry.getValue());
                 glTexParameterf(GL_TEXTURE_2D, GLES11Ext.GL_TEXTURE_MAX_ANISOTROPY_EXT, getAnisotropy());

@@ -10,6 +10,7 @@ package com.live2d.sdk.cubism.framework.motion;
 import com.live2d.sdk.cubism.framework.id.CubismId;
 import com.live2d.sdk.cubism.framework.math.CubismMath;
 import com.live2d.sdk.cubism.framework.model.CubismModel;
+import com.live2d.sdk.cubism.framework.utils.CubismDebug;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -97,8 +98,6 @@ public class CubismExpressionMotionManager extends CubismMotionQueueManager {
         }
         currentPriority = priority;     // 再生中モーションの優先度を設定
 
-        fadeWeights.add(0.0f);
-
         return startMotion(motion);
     }
 
@@ -130,6 +129,10 @@ public class CubismExpressionMotionManager extends CubismMotionQueueManager {
 
         // 予めnull要素を全て削除
         motions.removeAll(nullSet);
+
+        while (fadeWeights.size() < motions.size()) {
+            fadeWeights.add(0.0f);
+        }
 
         // ------ 処理を行う ------
         // 既に表情モーションがあれば終了フラグを立てる
@@ -172,14 +175,14 @@ public class CubismExpressionMotionManager extends CubismMotionQueueManager {
 
             // ------ 値を計算する ------
             expressionMotion.setupMotionQueueEntry(motionQueueEntry, userTimeSeconds);
-            fadeWeights.set(expressionIndex, expressionMotion.updateFadeWeight(motionQueueEntry, userTimeSeconds));
+            setFadeWeight(expressionIndex, expressionMotion.updateFadeWeight(motionQueueEntry, userTimeSeconds));
             expressionMotion.calculateExpressionParameters(
                 model,
                 userTimeSeconds,
                 motionQueueEntry,
                 expressionParameterValues,
                 expressionIndex,
-                fadeWeights.get(expressionIndex)
+                getFadeWeight(expressionIndex)
             );
 
             final float easingSine = expressionMotion.getFadeInTime() == 0.0f
@@ -199,9 +202,8 @@ public class CubismExpressionMotionManager extends CubismMotionQueueManager {
 
         // ------ 最新のExpressionのフェードが完了していればそれ以前を削除する ------
         if (motions.size() > 1) {
-            CubismExpressionMotion expressionMotion = (CubismExpressionMotion) motions.get(motions.size() - 1).getCubismMotion();
+            float latestFadeWeight = getFadeWeight(fadeWeights.size() - 1);
 
-            float latestFadeWeight = fadeWeights.get(fadeWeights.size() - 1);
             if (latestFadeWeight >= 1.0f) {
                 // 配列の最後の要素は削除しない
                 for (int i = motions.size() - 2; i >= 0; i--) {
@@ -231,6 +233,20 @@ public class CubismExpressionMotionManager extends CubismMotionQueueManager {
         }
 
         return isUpdated;
+    }
+
+    /**
+     * Set the weight of expression fade.
+     *
+     * @param index index of the expression motion to be set
+     * @param expressionFadeWeight weight value of expression fade
+     */
+    private void setFadeWeight(int index, float expressionFadeWeight) {
+        if (index < 0 || fadeWeights.isEmpty() || fadeWeights.size() <= index) {
+            CubismDebug.cubismLogWarning("Failed to set the fade weight value. The element at that index does not exist.");
+            return;
+        }
+        fadeWeights.set(index, expressionFadeWeight);
     }
 
     // nullが格納されたSet。null要素だけListから排除する際に使用される。

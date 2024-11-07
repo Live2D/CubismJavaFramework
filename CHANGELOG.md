@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+
+## [5-r.2] - 2024-11-07
+
+### Added
+
+* Add function to get `CombinedParameters` listed in `cdi3.json`.
+* Add the functionality to call a function when motion playback starts.
+
+### Changed
+
+* Change the access level of `CubismMotionJson` class to public.
+* Change the threshold for enabling anisotropic filtering.
+
+### Fixed
+
+* Fix a bug in which a method to acquire events fired during motion playback returned incorrect values when called multiple times.
+* Fix a potential problem with division by 0 when a pose fade time is set to 0 seconds.
+* Fix a bug that thrown an exception when playing CubismExpresionMotion with CubismMotionQueueManager.startMotion().
+
+
 ## [5-r.1] - 2024-03-26
 
 ### Added
@@ -180,6 +200,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 * New released!
 
+[5-r.2]: https://github.com/Live2D/CubismJavaFramework/compare/5-r.1...5-r.2
 [5-r.1]: https://github.com/Live2D/CubismJavaFramework/compare/5-r.1-beta.3...5-r.1
 [5-r.1-beta.3]: https://github.com/Live2D/CubismJavaFramework/compare/5-r.1-beta.2...5-r.1-beta.3
 [5-r.1-beta.2]: https://github.com/Live2D/CubismJavaFramework/compare/5-r.1-beta.1...5-r.1-beta.2

@@ -216,11 +216,28 @@ public abstract class ACubismMotion {
      * @return list of events that have fired
      */
     public List<String> getFiredEvent(float beforeCheckTimeSeconds, float motionTimeSeconds) {
-        if (areFiredEventValuesChanged) {
-            cachedImmutableFiredEventValues = Collections.unmodifiableList(firedEventValues);
-            areFiredEventValuesChanged = false;
-        }
-        return cachedImmutableFiredEventValues;
+        return Collections.unmodifiableList(firedEventValues);
+    }
+
+    /**
+     * Registers a motion playback start callback.
+     * It is not called in the following states:
+     * 1. when the currently playing motion is set as "loop"
+     * 2. when null is registered in the callback
+     *
+     * @param onBeganMotionHandler start-of-motion playback callback function
+     */
+    public void setBeganMotionHandler(IBeganMotionCallback onBeganMotionHandler) {
+        onBeganMotion = onBeganMotionHandler;
+    }
+
+    /**
+     * Get the start-of-motion playback callback function.
+     *
+     * @return registered start-of-motion playback callback function; if null, no function is registered
+     */
+    public IBeganMotionCallback getBeganMotionCallback() {
+        return onBeganMotion;
     }
 
     /**
@@ -319,9 +336,10 @@ public abstract class ACubismMotion {
      */
     protected List<String> firedEventValues = new ArrayList<String>();
 
-    protected boolean areFiredEventValuesChanged = true;
-
-    protected List<String> cachedImmutableFiredEventValues;
+    /**
+     * Start-of-motion playback callback function
+     */
+    protected IBeganMotionCallback onBeganMotion;
 
     /**
      * End-of-motion playback callback function
