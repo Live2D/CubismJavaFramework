@@ -68,6 +68,13 @@ class CubismMotionInternal {
          * value
          */
         public float value;
+
+        public CubismMotionPoint() {}
+
+        public CubismMotionPoint(final float time, final float value) {
+            this.time = time;
+            this.value = value;
+        }
     }
 
     /**
@@ -178,6 +185,6 @@ class CubismMotionInternal {
      * For strategy pattern.
      */
     public interface CsmMotionSegmentEvaluationFunction {
-        float evaluate(float time, int basePointIndex);
+        float evaluate(final List<CubismMotionPoint> points, final float time);
     }
 }

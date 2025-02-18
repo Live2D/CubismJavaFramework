@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
+## [5-r.3] - 2025-02-18
+
+### Added
+
+* Add new motion loop processing that seamlessly connects the start and end points of the loop.
+  * The `isLooped` variable has been moved from the `CubismMotion` class to the `ACubismMotion` class as `isLoop`.
+  * Add the setter for `isLoop`, `setLoop(boolean loop)`, to class `ACubismMotion`.
+  * Add the getter for `isLoop`, `getLoop()`, to class `ACubismMotion`.
+  * The `isLoopFadeIn` variable was moved from class `CubismMotion` to class `ACubismMotion`.
+  * Add the setter for `isLoopFadeIn`, `setLoopFadeIn(boolean loopFadeIn)`, to class `ACubismMotion`.
+  * Add the getter for `isLoopFadeIn`, `getLoopFadeIn()`, to class `ACubismMotion`.
+  * Add a variable `motionBehavior` for version control to the `CubismMotion` class.
+
+### Changed
+
+* Change the compile and target SDK version of Android OS to 15.0 (API 35).
+  * Upgrade the version of Android Gradle Plugin from 8.1.1 to 8.6.1.
+  * Upgrade the version of Gradle from 8.2 to 8.7.
+  * Change the minimum version of Android Studio to Ladybug(2024.2.1).
+* Change the arguments of `CsmMotionSegmentEvaluationFunction.evaluate` from `(float time, int basePointIndex)` to `(final List<CubismMotionPoint> points, final float time)` to align with the Cubism SDK for Native codebase.
+  * Accordingly, change the implementation of the following methods.
+    * CubismMotion.LinearEvaluator.evaluate()
+    * CubismMotion.BezierEvaluator.evaluate()
+    * CubismMotion.BezierEvaluatorCardanoInterpretation.evaluate()
+    * CubismMotion.SteppedEvaluator.evaluate()
+    * CubismMotion.InverseSteppedEvaluator.evaluate()
+    * CubismMotion.bezierEvaluateBinarySearch()
+* Change the access level of `CubismMotionQueueEntry` class to public.
+
+### Deprecated
+
+* Deprecate the following elements due to the change in the variable declaration location.
+  * `CubismMotion.isLoop(boolean loop)`
+  * `CubismMotion.isLoop()`
+  * `CubismMotion.isLoopFadeIn(boolean loopFadeIn)`
+  * `CubismMotion.isLoopFadeIn()`
+
+
 ## [5-r.2] - 2024-11-07
 
 ### Added
@@ -200,6 +238,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 * New released!
 
+
+[5-r.3]: https://github.com/Live2D/CubismJavaFramework/compare/5-r.2...5-r.3
 [5-r.2]: https://github.com/Live2D/CubismJavaFramework/compare/5-r.1...5-r.2
 [5-r.1]: https://github.com/Live2D/CubismJavaFramework/compare/5-r.1-beta.3...5-r.1
 [5-r.1-beta.3]: https://github.com/Live2D/CubismJavaFramework/compare/5-r.1-beta.2...5-r.1-beta.3

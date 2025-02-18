@@ -10,7 +10,7 @@ package com.live2d.sdk.cubism.framework.motion;
 /**
  * Manager class for each motion being played by CubismMotionQueueManager.
  */
-class CubismMotionQueueEntry {
+public class CubismMotionQueueEntry {
     /**
      * Get the motion.
      *
