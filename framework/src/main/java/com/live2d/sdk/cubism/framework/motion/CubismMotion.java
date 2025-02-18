@@ -24,6 +24,15 @@ import java.util.List;
  */
 public final class CubismMotion extends ACubismMotion {
     /**
+     * Enumerator for version control of Motion Behavior.
+     * For details, see the SDK Manual.
+     */
+    public enum MotionBehavior {
+        MOTION_BEHAVIOR_V1,
+        MOTION_BEHAVIOR_V2,
+    }
+
+    /**
      * Create an instance.
      *
      * @param buffer buffer where motion3.json is loaded
@@ -59,36 +68,74 @@ public final class CubismMotion extends ACubismMotion {
      * Set loop information.
      *
      * @param loop loop information
+     *
+     * @deprecated Not recommended due to the relocation of isLoop to the base class.
+     *             Use ACubismMotion.setLoop(boolean loop) instead.
      **/
+    @Deprecated
     public void isLooped(boolean loop) {
-        isLooped = loop;
+        CubismDebug.cubismLogWarning("isLoop(boolean loop) is a deprecated function. Please use setLoop(boolean loop).");
+        super.setLoop(loop);
     }
 
     /**
      * Whether the motion loops.
      *
      * @return If it loops, return true.
+     *
+     * @deprecated Not recommended due to the relocation of isLoop to the base class.
+     *             Use ACubismMotion.getLoop() instead.
      */
+    @Deprecated
     public boolean isLooped() {
-        return isLooped;
+        CubismDebug.cubismLogWarning("isLoop() is a deprecated function. Please use getLoop().");
+        return super.getLoop();
     }
 
     /**
      * Set the fade-in information at looping.
      *
      * @param loopFadeIn fade-in information at looping
+     *
+     * @deprecated Not recommended due to the relocation of isLoopFadeIn to the base class.
+     *             Use ACubismMotion.setLoopFadeIn(boolean loopFadeIn) instead.
      */
+    @Deprecated
     public void isLoopFadeIn(boolean loopFadeIn) {
-        isLoopFadeIn = loopFadeIn;
+        CubismDebug.cubismLogWarning("isLoopFadeIn(boolean loopFadeIn) is a deprecated function. Please use setLoopFadeIn(boolean loopFadeIn)");
+        super.setLoopFadeIn(loopFadeIn);
     }
 
     /**
      * Whether the motion fade in at looping.
      *
      * @return If it fades in, return true.
+     *
+     * @deprecated Not recommended due to the relocation of isLoopFadeIn to the base class.
+     *             Use ACubismMotion.getLoopFadeIn() instead.
      */
+    @Deprecated
     public boolean isLoopFadeIn() {
-        return isLoopFadeIn;
+        CubismDebug.cubismLogWarning("isLoopFadeIn() is a deprecated function. Please use getLoopFadeIn().");
+        return super.getLoopFadeIn();
+    }
+
+    /**
+     * Sets the version of the Motion Behavior.
+     *
+     * @param motionBehavior the version of the Motion Behavior.
+     */
+    public void setMotionBehavior(MotionBehavior motionBehavior) {
+        this.motionBehavior = motionBehavior;
+    }
+
+    /**
+     * Gets the version of the Motion Behavior.
+     *
+     * @return Returns the version of the Motion Behavior.
+     */
+    public MotionBehavior getMotionBehavior() {
+        return motionBehavior;
     }
 
     /**
@@ -175,7 +222,7 @@ public final class CubismMotion extends ACubismMotion {
 
     @Override
     public float getDuration() {
-        return isLooped
+        return isLoop
                ? -1.0f
                : loopDurationSeconds;
     }
@@ -280,6 +327,14 @@ public final class CubismMotion extends ACubismMotion {
             modelCurveIdOpacity = CubismFramework.getIdManager().getId(ID_NAME_OPACITY);
         }
 
+        if (motionBehavior == MotionBehavior.MOTION_BEHAVIOR_V2) {
+            if (previousLoopState != isLoop) {
+                // 終了時間を再計算する
+                adjustEndTime(motionQueueEntry);
+                previousLoopState = isLoop;
+            }
+        }
+
         float timeOffsetSeconds = userTimeSeconds - motionQueueEntry.getStartTime();
 
 
@@ -301,10 +356,15 @@ public final class CubismMotion extends ACubismMotion {
 
         // 'Repeat time as necessary'
         float time = timeOffsetSeconds;
+        float duration = motionData.duration;
+        boolean isCorrection = motionBehavior == MotionBehavior.MOTION_BEHAVIOR_V2 && isLoop;
 
-        if (isLooped) {
-            while (time > motionData.duration) {
-                time -= motionData.duration;
+        if (isLoop) {
+            if (motionBehavior == MotionBehavior.MOTION_BEHAVIOR_V2) {
+                duration += 1.0f / motionData.fps;
+            }
+            while (time > duration) {
+                time -= duration;
             }
         }
 
@@ -328,7 +388,7 @@ public final class CubismMotion extends ACubismMotion {
             }
 
             // Evaluate curve and call handler.
-            value = evaluateCurve(curve, time);
+            value = evaluateCurve(motionData, i, time, isCorrection, duration);
 
             if (curve.id.equals(modelCurveIdEyeBlink)) {
                 eyeBlinkValue = value;
@@ -369,7 +429,7 @@ public final class CubismMotion extends ACubismMotion {
             final float sourceValue = model.getParameterValue(parameterIndex);
 
             // Evaluate curve and apply value.
-            value = evaluateCurve(curve, time);
+            value = evaluateCurve(motionData, i, time, isCorrection, duration);
 
             if (isUpdatedEyeBlink) {
                 for (int j = 0; j < eyeBlinkParameterIds.size(); j++) {
@@ -500,19 +560,13 @@ public final class CubismMotion extends ACubismMotion {
             }
 
             // Evaluate curve and apply value.
-            value = evaluateCurve(curve, time);
+            value = evaluateCurve(motionData, i, time, isCorrection, duration);
             model.setParameterValue(parameterIndex, value);
         }
 
-        if (timeOffsetSeconds >= motionData.duration) {
-            if (isLooped) {
-                // Initialize
-                motionQueueEntry.setStartTime(userTimeSeconds);
-
-                if (isLoopFadeIn) {
-                    // If fade-in for loop is enabled in a loop, set fade-in again.
-                    motionQueueEntry.setFadeInStartTime(userTimeSeconds);
-                }
+        if (timeOffsetSeconds >= duration) {
+            if (isLoop) {
+                UpdateForNextLoop(motionQueueEntry, userTimeSeconds, time);
             } else {
                 if (onFinishedMotion != null) {
                     onFinishedMotion.execute(this);
@@ -521,6 +575,31 @@ public final class CubismMotion extends ACubismMotion {
             }
         }
         lastWeight = fadeWeight;
+    }
+
+    private void UpdateForNextLoop(CubismMotionQueueEntry motionQueueEntry, float userTimeSeconds, float time) {
+        switch (motionBehavior) {
+            case MOTION_BEHAVIOR_V1:
+                // 旧ループ処理
+                motionQueueEntry.setStartTime(userTimeSeconds); //最初の状態へ
+                if (isLoopFadeIn) {
+                    //ループ中でループ用フェードインが有効のときは、フェードイン設定し直し
+                    motionQueueEntry.setFadeInStartTime(userTimeSeconds);
+                }
+                break;
+            case MOTION_BEHAVIOR_V2:
+            default:
+                motionQueueEntry.setStartTime(userTimeSeconds - time); //最初の状態へ
+                if (isLoopFadeIn) {
+                    //ループ中でループ用フェードインが有効のときは、フェードイン設定し直し
+                    motionQueueEntry.setFadeInStartTime(userTimeSeconds - time);
+                }
+
+                if (this.onFinishedMotion != null) {
+                    this.onFinishedMotion.execute(this);
+                }
+                break;
+        }
     }
 
     // ID
@@ -555,74 +634,76 @@ public final class CubismMotion extends ACubismMotion {
         }
     }
 
-    private class LinearEvaluator implements CsmMotionSegmentEvaluationFunction {
+    private static class LinearEvaluator implements CsmMotionSegmentEvaluationFunction {
         @Override
-        public float evaluate(float time, int basePointIndex) {
-            CubismMotionPoint p0 = motionData.points.get(basePointIndex);
-            CubismMotionPoint p1 = motionData.points.get(basePointIndex + 1);
-
-            float t = (time - p0.time) / (p1.time - p0.time);
-
-            if (t < 0.0f) {
-                t = 0.0f;
-            }
-            return p0.value + (p1.value - p0.value) * t;
-        }
-    }
-
-    private class BezierEvaluator implements CsmMotionSegmentEvaluationFunction {
-        @Override
-        public float evaluate(final float time, final int basePointIndex) {
-            final CubismMotionPoint p0 = motionData.points.get(basePointIndex);
-            final CubismMotionPoint p1 = motionData.points.get(basePointIndex + 1);
-            final CubismMotionPoint p2 = motionData.points.get(basePointIndex + 2);
-            final CubismMotionPoint p3 = motionData.points.get(basePointIndex + 3);
-
-            float t = (time - p0.time) / (p3.time - p0.time);
+        public float evaluate(final List<CubismMotionPoint> points, final float time) {
+            float t = (time - points.get(0).time) / (points.get(1).time - points.get(0).time);
 
             if (t < 0.0f) {
                 t = 0.0f;
             }
 
-            return getLerpPointsValue(p0, p1, p2, p3, t);
+            return points.get(0).value + ((points.get(1).value - points.get(0).value) * t);
         }
     }
 
-    private class BezierEvaluatorCardanoInterpretation implements CsmMotionSegmentEvaluationFunction {
+    private static class BezierEvaluator implements CsmMotionSegmentEvaluationFunction {
         @Override
-        public float evaluate(final float time, final int basePointIndex) {
-            CubismMotionPoint p0 = motionData.points.get(basePointIndex);
-            CubismMotionPoint p1 = motionData.points.get(basePointIndex + 1);
-            CubismMotionPoint p2 = motionData.points.get(basePointIndex + 2);
-            CubismMotionPoint p3 = motionData.points.get(basePointIndex + 3);
+        public float evaluate(final List<CubismMotionPoint> points, final float time) {
+            float t = (time - points.get(0).time) / (points.get(3).time - points.get(0).time);
 
-            final float x1 = p0.time;
-            final float x2 = p3.time;
-            final float cx1 = p1.time;
-            final float cx2 = p2.time;
+            if (t < 0.0f) {
+                t = 0.0f;
+            }
+
+            final CubismMotionPoint p01 = lerpPoints(points.get(0), points.get(1), t);
+            final CubismMotionPoint p12 = lerpPoints(points.get(1), points.get(2), t);
+            final CubismMotionPoint p23 = lerpPoints(points.get(2), points.get(3), t);
+
+            final CubismMotionPoint p012 = lerpPoints(p01, p12, t);
+            final CubismMotionPoint p123 = lerpPoints(p12, p23, t);
+
+            return lerpPoints(p012, p123, t).value;
+        }
+    }
+
+    private static class BezierEvaluatorCardanoInterpretation implements CsmMotionSegmentEvaluationFunction {
+        @Override
+        public float evaluate(final List<CubismMotionPoint> points, final float time) {
+            final float x1 = points.get(0).time;
+            final float x2 = points.get(3).time;
+            final float cx1 = points.get(1).time;
+            final float cx2 = points.get(2).time;
 
             final float a = x2 - 3.0f * cx2 + 3.0f * cx1 - x1;
             final float b = 3.0f * cx2 - 6.0f * cx1 + 3.0f * x1;
             final float c = 3.0f * cx1 - 3.0f * x1;
             final float d = x1 - time;
 
-            float t = CubismMath.cardanoAlgorithmForBezier(a, b, c, d);
+            final float t = CubismMath.cardanoAlgorithmForBezier(a, b, c, d);
 
-            return getLerpPointsValue(p0, p1, p2, p3, t);
+            final CubismMotionPoint p01 = lerpPoints(points.get(0), points.get(1), t);
+            final CubismMotionPoint p12 = lerpPoints(points.get(1), points.get(2), t);
+            final CubismMotionPoint p23 = lerpPoints(points.get(2), points.get(3), t);
+
+            final CubismMotionPoint p012 = lerpPoints(p01, p12, t);
+            final CubismMotionPoint p123 = lerpPoints(p12, p23, t);
+
+            return lerpPoints(p012, p123, t).value;
         }
     }
 
-    private class SteppedEvaluator implements CsmMotionSegmentEvaluationFunction {
+    private static class SteppedEvaluator implements CsmMotionSegmentEvaluationFunction {
         @Override
-        public float evaluate(float time, int basePointIndex) {
-            return motionData.points.get(basePointIndex).value;
+        public float evaluate(final List<CubismMotionPoint> points, final float time) {
+            return points.get(0).value;
         }
     }
 
-    private class InverseSteppedEvaluator implements CsmMotionSegmentEvaluationFunction {
+    private static class InverseSteppedEvaluator implements CsmMotionSegmentEvaluationFunction {
         @Override
-        public float evaluate(final float time, final int basePointIndex) {
-            return motionData.points.get(basePointIndex + 1).value;
+        public float evaluate(final List<CubismMotionPoint> points, final float time) {
+            return points.get(1).value;
         }
     }
 
@@ -630,13 +711,14 @@ public final class CubismMotion extends ACubismMotion {
     private static CubismMotionPoint lerpPoints(
         final CubismMotionPoint a,
         final CubismMotionPoint b,
-        final float t,
-        CubismMotionPoint motionPoint
+        final float t
     ) {
-        motionPoint.time = a.time + ((b.time - a.time) * t);
-        motionPoint.value = a.value + ((b.value - a.value) * t);
+        CubismMotionPoint result = new CubismMotionPoint();
 
-        return motionPoint;
+        result.time = a.time + ((b.time - a.time) * t);
+        result.value = a.value + ((b.value - a.value) * t);
+
+        return result;
     }
 
     /**
@@ -864,52 +946,20 @@ public final class CubismMotion extends ACubismMotion {
         }
     }
 
-    private float getLerpPointsValue(
-        CubismMotionPoint p0,
-        CubismMotionPoint p1,
-        CubismMotionPoint p2,
-        CubismMotionPoint p3,
-        float t
-    ) {
-        lerpPoints(p0, p1, t, p01);
-        lerpPoints(p1, p2, t, p12);
-        lerpPoints(p2, p3, t, p23);
-
-        lerpPoints(p01, p12, t, p012);
-        lerpPoints(p12, p23, t, p123);
-
-        return lerpPoints(p012, p123, t, result).value;
-    }
-
-    // These are only used by 'getLerpPointsValue' method.
-    // Avoid creating a new CubismMotionPoint instance in 'lerpPoints' method.
-    private final CubismMotionPoint p01 = new CubismMotionPoint();
-    private final CubismMotionPoint p12 = new CubismMotionPoint();
-    private final CubismMotionPoint p23 = new CubismMotionPoint();
-    private final CubismMotionPoint p012 = new CubismMotionPoint();
-    private final CubismMotionPoint p123 = new CubismMotionPoint();
-    private final CubismMotionPoint result = new CubismMotionPoint();
-
-    private float bezierEvaluateBinarySearch(final float time, final int basePointIndex) {
+    private float bezierEvaluateBinarySearch(final CubismMotionPoint[] points, final float time) {
         final float x_error = 0.01f;
 
-        final CubismMotionPoint p0 = motionData.points.get(basePointIndex);
-        final CubismMotionPoint p1 = motionData.points.get(basePointIndex + 1);
-        final CubismMotionPoint p2 = motionData.points.get(basePointIndex + 2);
-        final CubismMotionPoint p3 = motionData.points.get(basePointIndex + 3);
-
-        float x1 = p0.time;
-        float x2 = p3.time;
-        float cx1 = p1.time;
-        float cx2 = p2.time;
+        float x1 = points[0].time;
+        float x2 = points[3].time;
+        float cx1 = points[1].time;
+        float cx2 = points[2].time;
 
         float ta = 0.0f;
         float tb = 1.0f;
         float t = 0.0f;
+        int i = 0;
 
-        int i;
-        for (i = 0; i < 20; i++) {
-
+        for (boolean var33 = true; i < 20; ++i) {
             if (time < x1 + x_error) {
                 t = ta;
                 break;
@@ -923,10 +973,9 @@ public final class CubismMotion extends ACubismMotion {
             float centerx = (cx1 + cx2) * 0.5f;
             cx1 = (x1 + cx1) * 0.5f;
             cx2 = (x2 + cx2) * 0.5f;
-            float ctrlx12 = (cx1 + centerx) * 0.5f;
+            final float ctrlx12 = (cx1 + centerx) * 0.5f;
             float ctrlx21 = (cx2 + centerx) * 0.5f;
             centerx = (ctrlx12 + ctrlx21) * 0.5f;
-
             if (time < centerx) {
                 tb = (ta + tb) * 0.5f;
                 if (centerx - x_error < time) {
@@ -936,7 +985,8 @@ public final class CubismMotion extends ACubismMotion {
 
                 x2 = centerx;
                 cx2 = ctrlx12;
-            } else {
+            }
+            else {
                 ta = (ta + tb) * 0.5f;
                 if (time < centerx + x_error) {
                     t = ta;
@@ -952,24 +1002,69 @@ public final class CubismMotion extends ACubismMotion {
             t = (ta + tb) * 0.5f;
         }
 
-        t = CubismMath.rangeF(t, 0.0f, 1.0f);
+        if (t < 0.0f)
+        {
+            t = 0.0f;
+        }
+        if (t > 1.0f)
+        {
+            t = 1.0f;
+        }
 
-        return getLerpPointsValue(p0, p1, p2, p3, t);
+        final CubismMotionPoint p01 = lerpPoints(points[0], points[1], t);
+        final CubismMotionPoint p12 = lerpPoints(points[1], points[2], t);
+        final CubismMotionPoint p23 = lerpPoints(points[2], points[3], t);
+
+        final CubismMotionPoint p012 = lerpPoints(p01, p12, t);
+        final CubismMotionPoint p123 = lerpPoints(p12, p23, t);
+
+        return lerpPoints(p012, p123, t).value;
     }
 
-    private float evaluateCurve(final CubismMotionCurve curve, final float time) {
-        // Find segment to evaluate.
-        int target = -1;
+    private float correctEndPoint(
+        final CubismMotionData motionData,
+        final int segmentIndex,
+        final int beginIndex,
+        final int endIndex,
+        final float time,
+        final float endTime
+    ) {
+        ArrayList<CubismMotionPoint> motionPoint = new ArrayList<CubismMotionPoint>(2);
+        {
+            final CubismMotionPoint src = motionData.points.get(endIndex);
+            motionPoint.add(new CubismMotionPoint(src.time, src.value));
+        }
+        {
+            final CubismMotionPoint src = motionData.points.get(beginIndex);
+            motionPoint.add(new CubismMotionPoint(src.time, src.value));
+        }
+        motionPoint.get(1).time = endTime;
 
+        switch (motionData.segments.get(segmentIndex).segmentType) {
+            case STEPPED:
+                return steppedEvaluator.evaluate(motionPoint, time);
+            case INVERSESTEPPED:
+                return inverseSteppedEvaluator.evaluate(motionPoint, time);
+            case LINEAR:
+            case BEZIER:
+            default:
+                return linearEvaluator.evaluate(motionPoint, time);
+        }
+    }
+
+    private float evaluateCurve(final CubismMotionData motionData, final int index, float time, final boolean isCorrection, final float endTime) {
+        // Find segment to evaluate.
+        final CubismMotionCurve curve = motionData.curves.get(index);
+
+        int target = -1;
         final int totalSegmentCount = curve.baseSegmentIndex + curve.segmentCount;
         int pointPosition = 0;
-
-        for (int i = curve.baseSegmentIndex; i < totalSegmentCount; i++) {
+        for (int i = curve.baseSegmentIndex; i < totalSegmentCount; ++i) {
             // Get first point of next segment.
             pointPosition = motionData.segments.get(i).basePointIndex
                 + (motionData.segments.get(i).segmentType == CubismMotionSegmentType.BEZIER
-                   ? 3
-                   : 1);
+                ? 3
+                : 1);
 
             // Break if time lies within current segment.
             if (motionData.points.get(pointPosition).time > time) {
@@ -979,12 +1074,25 @@ public final class CubismMotion extends ACubismMotion {
         }
 
         if (target == -1) {
+            if (isCorrection && time < endTime) {
+                // 終点から始点への補正処理
+                return correctEndPoint(
+                    motionData,
+                    totalSegmentCount - 1,
+                    motionData.segments.get(curve.baseSegmentIndex).basePointIndex,
+                    pointPosition,
+                    time,
+                    endTime
+                );
+            }
+
             return motionData.points.get(pointPosition).value;
         }
 
         final CubismMotionSegment segment = motionData.segments.get(target);
 
-        return segment.evaluator.evaluate(time, segment.basePointIndex);
+        final List<CubismMotionPoint> points = motionData.points.subList(segment.basePointIndex, motionData.points.size());
+        return segment.evaluator.evaluate(points, time);
     }
 
     /**
@@ -995,14 +1103,9 @@ public final class CubismMotion extends ACubismMotion {
      * length of the sequence of motions defined in the motion3.json file.
      */
     private float loopDurationSeconds = -1.0f;
-    /**
-     * enable/Disable loop
-     */
-    private boolean isLooped;
-    /**
-     * flag whether fade-in is enabled at looping. Default value is true.
-     */
-    private boolean isLoopFadeIn = true;
+
+    private MotionBehavior motionBehavior = MotionBehavior.MOTION_BEHAVIOR_V2;
+
     /**
      * last set weight
      */
