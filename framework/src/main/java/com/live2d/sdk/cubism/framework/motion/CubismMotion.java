@@ -11,7 +11,14 @@ import com.live2d.sdk.cubism.framework.CubismFramework;
 import com.live2d.sdk.cubism.framework.id.CubismId;
 import com.live2d.sdk.cubism.framework.math.CubismMath;
 import com.live2d.sdk.cubism.framework.model.CubismModel;
-import com.live2d.sdk.cubism.framework.motion.CubismMotionInternal.*;
+import com.live2d.sdk.cubism.framework.motion.CubismMotionInternal.CsmMotionSegmentEvaluationFunction;
+import com.live2d.sdk.cubism.framework.motion.CubismMotionInternal.CubismMotionCurve;
+import com.live2d.sdk.cubism.framework.motion.CubismMotionInternal.CubismMotionCurveTarget;
+import com.live2d.sdk.cubism.framework.motion.CubismMotionInternal.CubismMotionData;
+import com.live2d.sdk.cubism.framework.motion.CubismMotionInternal.CubismMotionEvent;
+import com.live2d.sdk.cubism.framework.motion.CubismMotionInternal.CubismMotionPoint;
+import com.live2d.sdk.cubism.framework.motion.CubismMotionInternal.CubismMotionSegment;
+import com.live2d.sdk.cubism.framework.motion.CubismMotionInternal.CubismMotionSegmentType;
 import com.live2d.sdk.cubism.framework.utils.CubismDebug;
 
 import java.util.ArrayList;
@@ -35,19 +42,29 @@ public final class CubismMotion extends ACubismMotion {
     /**
      * Create an instance.
      *
-     * @param buffer buffer where motion3.json is loaded
-     * @param finishedMotionCallBack callback function called at the end of motion playback, not called if null.
-     * @param beganMotionCallBack callback function called at the start of motion playback, not called if null.
+     * @param buffer                       buffer where motion3.json is loaded
+     * @param finishedMotionCallBack       callback function called at the end of motion playback, not called if null.
+     * @param beganMotionCallBack          callback function called at the start of motion playback, not called if null.
+     * @param shouldCheckMotionConsistency flag to validate the consistency of motion3.json.
      * @return instance of CubismMotion
      */
-    public static CubismMotion create(byte[] buffer, IFinishedMotionCallback finishedMotionCallBack, IBeganMotionCallback beganMotionCallBack) {
+    public static CubismMotion create(
+        byte[] buffer,
+        IFinishedMotionCallback finishedMotionCallBack,
+        IBeganMotionCallback beganMotionCallBack,
+        boolean shouldCheckMotionConsistency
+    ) {
         CubismMotion motion = new CubismMotion();
-        motion.parse(buffer);
+        motion.parse(buffer, shouldCheckMotionConsistency);
 
-        motion.sourceFrameRate = motion.motionData.fps;
-        motion.loopDurationSeconds = motion.motionData.duration;
-        motion.onFinishedMotion = finishedMotionCallBack;
-        motion.onBeganMotion = beganMotionCallBack;
+        if (motion.motionData != null) {
+            motion.sourceFrameRate = motion.motionData.fps;
+            motion.loopDurationSeconds = motion.motionData.duration;
+            motion.onFinishedMotion = finishedMotionCallBack;
+            motion.onBeganMotion = beganMotionCallBack;
+        } else {
+            motion = null;
+        }
 
         // NOTE: Exporting motion with loop is not supported in Editor.
         return motion;
@@ -55,13 +72,49 @@ public final class CubismMotion extends ACubismMotion {
 
     /**
      * Create an instance.
-     * If callback function is not specified, it becomes 'null'.
+     * This method does not check the consistency of motion3.json.
+     * To check the consistency of motion3.json,
+     * use {@link #create(byte[], IFinishedMotionCallback, IBeganMotionCallback, boolean)}
+     * and set the fourth argument to `true`.
+     *
+     * @param buffer buffer where motion3.json is loaded
+     * @param finishedMotionCallBack callback function called at the end of motion playback, not called if null.
+     * @param beganMotionCallBack callback function called at the start of motion playback, not called if null.
+     * @return instance of CubismMotion
+     */
+    public static CubismMotion create(
+        byte[] buffer,
+        IFinishedMotionCallback finishedMotionCallBack,
+        IBeganMotionCallback beganMotionCallBack
+    ) {
+        return create(buffer, finishedMotionCallBack, beganMotionCallBack, false);
+    }
+
+    /**
+     * Create an instance.
+     * This method does not set any callback functions.
+     *
+     * @param buffer                       buffer where motion3.json is loaded
+     * @param shouldCheckMotionConsistency flag to validate the consistency of motion3.json.
+     * @return instance of CubismMotion
+     */
+    public static CubismMotion create(byte[] buffer, boolean shouldCheckMotionConsistency) {
+        return create(buffer, null, null, shouldCheckMotionConsistency);
+    }
+
+    /**
+     * Create an instance.
+     * This method does not check the consistency of motion3.json.
+     * To check the consistency of motion3.json,
+     * use {@link #create(byte[], boolean)}
+     * and set the second argument to `true`.
+     * This method does not set any callback functions.
      *
      * @param buffer buffer where motion3.json is loaded.
      * @return instance of CubismMotion
      */
     public static CubismMotion create(byte[] buffer) {
-        return create(buffer, null, null);
+        return create(buffer, null, null, false);
     }
 
     /**
@@ -463,6 +516,11 @@ public final class CubismMotion extends ACubismMotion {
                 }
             }
 
+            // Process repeats only for compatibility
+            if (model.isRepeat(parameterIndex)) {
+                value = model.getParameterRepeatValue(parameterIndex, value);
+            }
+
             float v;
             if (existFade(curve)) {
                 // If the parameter has a fade-in or fade-out setting, apply it.
@@ -755,11 +813,22 @@ public final class CubismMotion extends ACubismMotion {
      * Parse motion3.json.
      *
      * @param motionJson buffer where motion3.json is loaded
+     * @param shouldCheckMotionConsistency flag to validate the consistency of motion3.json.
      */
-    private void parse(byte[] motionJson) {
+    private void parse(byte[] motionJson, boolean shouldCheckMotionConsistency) {
+        final CubismMotionJson json = new CubismMotionJson(motionJson);
+
+        if (shouldCheckMotionConsistency) {
+            boolean consistency = json.hasConsistency();
+
+            if (!consistency) {
+                // 整合性が確認できなければ処理しない。
+                CubismDebug.cubismLogError("Inconsistent motion3.json.");
+                return;
+            }
+        }
+
         motionData = new CubismMotionData();
-        final CubismMotionJson json;
-        json = new CubismMotionJson(motionJson);
 
         motionData.duration = json.getMotionDuration();
         motionData.isLooped = json.isMotionLoop();
@@ -850,21 +919,7 @@ public final class CubismMotion extends ACubismMotion {
                     motionData.segments.get(totalSegmentCount).basePointIndex = totalPointCount - 1;
                 }
 
-                final int tmpSegment = (int) (json.getMotionCurveSegment(curveCount, segmentPosition));
-
-                CubismMotionSegmentType segmentType = null;
-
-                if (tmpSegment == 0) {
-                    segmentType = CubismMotionSegmentType.LINEAR;
-                } else if (tmpSegment == 1) {
-                    segmentType = CubismMotionSegmentType.BEZIER;
-                } else if (tmpSegment == 2) {
-                    segmentType = CubismMotionSegmentType.STEPPED;
-                } else if (tmpSegment == 3) {
-                    segmentType = CubismMotionSegmentType.INVERSESTEPPED;
-                } else {
-                    assert (false);
-                }
+                final CubismMotionSegmentType segmentType = json.getMotionCurveSegmentType(curveCount, segmentPosition);
 
                 switch (segmentType) {
                     case LINEAR: {

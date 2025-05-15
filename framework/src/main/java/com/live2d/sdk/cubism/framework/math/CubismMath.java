@@ -16,6 +16,16 @@ public class CubismMath {
     public static final float PI = 3.1415926535897932384626433832795f;
     public static final float EPSILON = 0.00001f;
 
+    public static float clampF(float val, float min, float max) {
+        if (val < min) {
+            return min;
+        } else if (max < val) {
+            return max;
+        }
+
+        return val;
+    }
+
     /**
      * Returns the value of the first argument in the range of minimum and maximum values.
      *

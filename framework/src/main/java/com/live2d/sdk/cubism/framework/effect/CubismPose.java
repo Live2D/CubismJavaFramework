@@ -339,7 +339,7 @@ public class CubismPose {
         float a1; // opacity to be calculated
         if (newOpacity < PHI) {
             // Linear equation passing through (0,1),(PHI,PHI)
-            a1 = newOpacity * (PHI - 1.0f) / (PHI + 1.0f);
+            a1 = newOpacity * (PHI - 1) / PHI + 1.0f;
         } else {
             a1 = (1 - newOpacity) * PHI / (1.0f - PHI);
         }

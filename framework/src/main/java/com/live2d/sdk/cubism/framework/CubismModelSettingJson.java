@@ -324,7 +324,7 @@ public class CubismModelSettingJson implements ICubismModelSetting {
     /**
      * Enum class for frequent nodes.
      */
-    private enum FrequentNode {
+    protected enum FrequentNode {
         GROUPS(0),
         MOC(1),
         MOTIONS(2),
@@ -335,14 +335,14 @@ public class CubismModelSettingJson implements ICubismModelSetting {
         POSE(7),
         HIT_AREAS(8);
 
-        private final int id;
+        protected final int id;
 
         FrequentNode(final int id) {
             this.id = id;
         }
     }
 
-    private enum JsonKey {
+    protected enum JsonKey {
         VERSION("Version"),
         FILE_REFERENCES("FileReferences"),
         GROUPS("Groups"),
@@ -392,7 +392,7 @@ public class CubismModelSettingJson implements ICubismModelSetting {
         INIT_PARTS_VISIBLE("init_parts_visible"),
         VAL("val");
 
-        private final String key;
+        protected final String key;
 
         JsonKey(String key) {
             this.key = key;
@@ -401,71 +401,71 @@ public class CubismModelSettingJson implements ICubismModelSetting {
 
 
     // キーが存在するかどうかのチェック
-    private boolean existsModelFile() {
+    protected boolean existsModelFile() {
         ACubismJsonValue node = jsonFrequencyValue.get(FrequentNode.MOC.id);
         return !node.isNull() && !node.isError();
     }
 
-    private boolean existsTextureFiles() {
+    protected boolean existsTextureFiles() {
         ACubismJsonValue node = jsonFrequencyValue.get(FrequentNode.TEXTURES.id);
         return !node.isNull() && !node.isError();
     }
 
-    private boolean existsHitAreas() {
+    protected boolean existsHitAreas() {
         ACubismJsonValue node = jsonFrequencyValue.get(FrequentNode.HIT_AREAS.id);
         return !node.isNull() && !node.isError();
     }
 
-    private boolean existsPhysicsFile() {
+    protected boolean existsPhysicsFile() {
         ACubismJsonValue node = jsonFrequencyValue.get(FrequentNode.PHYSICS.id);
         return !node.isNull() && !node.isError();
     }
 
-    private boolean existsPoseFile() {
+    protected boolean existsPoseFile() {
         ACubismJsonValue node = jsonFrequencyValue.get(FrequentNode.POSE.id);
         return !node.isNull() && !node.isError();
     }
 
-    private boolean existsDisplayInfoFile() {
+    protected boolean existsDisplayInfoFile() {
         ACubismJsonValue node = jsonFrequencyValue.get(FrequentNode.DISPLAY_INFO.id);
         return !node.isNull() && !node.isError();
     }
 
-    private boolean existsExpressionFile() {
+    protected boolean existsExpressionFile() {
         ACubismJsonValue node = jsonFrequencyValue.get(FrequentNode.EXPRESSIONS.id);
         return !node.isNull() && !node.isError();
     }
 
-    private boolean existsMotionGroups() {
+    protected boolean existsMotionGroups() {
         ACubismJsonValue node = jsonFrequencyValue.get(FrequentNode.MOTIONS.id);
         return !node.isNull() && !node.isError();
     }
 
-    private boolean existsMotionGroupName(String groupName) {
+    protected boolean existsMotionGroupName(String groupName) {
         ACubismJsonValue node = jsonFrequencyValue.get(FrequentNode.MOTIONS.id).get(groupName);
         return !node.isNull() && !node.isError();
     }
 
-    private boolean existsMotionSoundFile(String groupName, int index) {
+    protected boolean existsMotionSoundFile(String groupName, int index) {
         ACubismJsonValue node = jsonFrequencyValue.get(FrequentNode.MOTIONS.id).get(groupName).get(index).get(JsonKey.SOUND_PATH.key);
         return !node.isNull() && !node.isError();
     }
 
-    private boolean existsMotionFadeIn(String groupName, int index) {
+    protected boolean existsMotionFadeIn(String groupName, int index) {
         ACubismJsonValue node = jsonFrequencyValue.get(FrequentNode.MOTIONS.id).get(groupName).get(index).get(JsonKey.FADE_IN_TIME.key);
         return !node.isNull() && !node.isError();
     }
 
-    private boolean existsMotionFadeOut(String groupName, int index) {
+    protected boolean existsMotionFadeOut(String groupName, int index) {
         ACubismJsonValue node = jsonFrequencyValue.get(FrequentNode.MOTIONS.id).get(groupName).get(index).get(JsonKey.FADE_OUT_TIME.key);
         return !node.isNull() && !node.isError();
     }
 
-    private boolean existsUserDataFile() {
+    protected boolean existsUserDataFile() {
         return !json.getRoot().get(JsonKey.FILE_REFERENCES.key).get(JsonKey.USER_DATA.key).isNull();
     }
 
-    private boolean existsEyeBlinkParameters() {
+    protected boolean existsEyeBlinkParameters() {
         if (jsonFrequencyValue.get(FrequentNode.GROUPS.id).isNull() || jsonFrequencyValue.get(FrequentNode.GROUPS.id).isError()) {
             return false;
         }
@@ -479,7 +479,7 @@ public class CubismModelSettingJson implements ICubismModelSetting {
         return false;
     }
 
-    private boolean existsLipSyncParameters() {
+    protected boolean existsLipSyncParameters() {
         if (jsonFrequencyValue.get(FrequentNode.GROUPS.id).isNull() || jsonFrequencyValue.get(FrequentNode.GROUPS.id).isError()) {
             return false;
         }
@@ -495,9 +495,9 @@ public class CubismModelSettingJson implements ICubismModelSetting {
     /**
      * model3.json data
      */
-    private final CubismJson json;
+    protected final CubismJson json;
     /**
      * Frequent nodes in the _json data
      */
-    private List<ACubismJsonValue> jsonFrequencyValue;
+    protected List<ACubismJsonValue> jsonFrequencyValue;
 }

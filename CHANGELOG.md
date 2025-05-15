@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
+## [5-r.4] - 2025-05-15
+
+### Added
+
+* Add an API to `CubismMotionJson` for verifying the consistency of `motion3.json`.
+* Add a flag to the arguments of the following methods to enable the function that verifies the consistency of `motion3.json`:
+  * `CubismUserModel.loadMotion()`
+  * `CubismMotion.create()`
+  * `CubismMotion.parse()`
+* Add parameter repeat processing that connects the right and left ends of the parameter to create a loop, allowing the motion to repeat.
+  * Add the variable `isOverriddenParameterRepeat` to the `CubismModel` class for managing parameter repeat flags at the model level.
+  * Add the variable `userParameterRepeatDataList` to the `CubismModel` class for managing parameter repeat flags for each parameter.
+* Add a `getPartParentPartIndices()` function.
+
+### Changed
+
+* Change the access level of the private members in the `CubismModelSettingJson` class to protected.
+* Change the default JDK version for compilation to 17 using Gradle's Java toolchain.
+
+### Fixed
+
+* Fix an issue in the `CubismPose` class where the opacity calculation for non-displayed parts differed from the implementation in the other Cubism SDK.
+
+
 ## [5-r.3] - 2025-02-18
 
 ### Added
@@ -52,6 +76,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
+* Change an expression "overwrite" to "override" for multiply color, screen color, and culling to adapt the actual behavior.
 * Change the access level of `CubismMotionJson` class to public.
 * Change the threshold for enabling anisotropic filtering.
 
@@ -239,6 +264,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 * New released!
 
 
+[5-r.4]: https://github.com/Live2D/CubismJavaFramework/compare/5-r.3...5-r.4
 [5-r.3]: https://github.com/Live2D/CubismJavaFramework/compare/5-r.2...5-r.3
 [5-r.2]: https://github.com/Live2D/CubismJavaFramework/compare/5-r.1...5-r.2
 [5-r.1]: https://github.com/Live2D/CubismJavaFramework/compare/5-r.1-beta.3...5-r.1
