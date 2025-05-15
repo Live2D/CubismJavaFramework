@@ -323,15 +323,17 @@ public abstract class CubismUserModel {
      * @param buffer a buffer where motion3.json file is loaded.
      * @param onFinishedMotionHandler the callback method called at finishing motion play. If it is null, callbacking methods is not conducting.
      * @param onBeganMotionHandler the callback method called at beginning motion play. If it is null, callbacking methods is not conducting.
+     * @param shouldCheckMotionConsistency flag to validate the consistency of motion3.json.
      * @return motion class
      */
     protected CubismMotion loadMotion(
         byte[] buffer,
         IFinishedMotionCallback onFinishedMotionHandler,
-        IBeganMotionCallback onBeganMotionHandler
+        IBeganMotionCallback onBeganMotionHandler,
+        boolean shouldCheckMotionConsistency
     ) {
         try {
-            return CubismMotion.create(buffer, onFinishedMotionHandler, onBeganMotionHandler);
+            return CubismMotion.create(buffer, onFinishedMotionHandler, onBeganMotionHandler, shouldCheckMotionConsistency);
         } catch (Exception e) {
             cubismLogError("Failed to loadMotion(). %s", e.getMessage());
             return null;
@@ -340,12 +342,49 @@ public abstract class CubismUserModel {
 
     /**
      * Load a motion data.
+     * This method does not check the consistency of motion3.json.
+     * To check the consistency of motion3.json,
+     * use {@link #loadMotion(byte[], IFinishedMotionCallback, IBeganMotionCallback, boolean)}
+     * and set the fourth argument to `true`.
+     *
+     * @param buffer a buffer where motion3.json file is loaded.
+     * @param onFinishedMotionHandler the callback method called at finishing motion play. If it is null, callbacking methods is not conducting.
+     * @param onBeganMotionHandler the callback method called at beginning motion play. If it is null, callbacking methods is not conducting.
+     * @return motion class
+     */
+    protected CubismMotion loadMotion(
+        byte[] buffer,
+        IFinishedMotionCallback onFinishedMotionHandler,
+        IBeganMotionCallback onBeganMotionHandler
+    ) {
+        return loadMotion(buffer, onFinishedMotionHandler, onBeganMotionHandler, false);
+    }
+
+    /**
+     * Load a motion data.
+     * This method does not set any callback functions.
+     *
+     * @param buffer                       a buffer where motion3.json file is loaded.
+     * @param shouldCheckMotionConsistency flag to validate the consistency of motion3.json.
+     * @return motion class
+     */
+    protected CubismMotion loadMotion(byte[] buffer, boolean shouldCheckMotionConsistency) {
+        return loadMotion(buffer, null, null, shouldCheckMotionConsistency);
+    }
+
+    /**
+     * Load a motion data.
+     * This method does not check the consistency of motion3.json.
+     * To check the consistency of motion3.json,
+     * use {@link #loadMotion(byte[], boolean)}
+     * and set the second argument to `true`.
+     * This method does not set any callback functions.
      *
      * @param buffer a buffer where motion3.json file is loaded.
      * @return motion class
      */
     protected CubismMotion loadMotion(byte[] buffer) {
-        return loadMotion(buffer, null, null);
+        return loadMotion(buffer, null, null, false);
     }
 
     /**
@@ -493,6 +532,10 @@ public abstract class CubismUserModel {
      * MOC3の整合性を検証するか。検証するならtrue。
      */
     protected boolean mocConsistency;
+    /**
+     * motion3.jsonの整合性を検証するか。検証するならtrue。
+     */
+    protected boolean motionConsistency;
     /**
      * Whether it is debug mode
      */

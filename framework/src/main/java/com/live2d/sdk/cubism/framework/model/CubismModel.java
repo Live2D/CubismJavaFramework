@@ -10,8 +10,10 @@ package com.live2d.sdk.cubism.framework.model;
 import com.live2d.sdk.cubism.core.*;
 import com.live2d.sdk.cubism.framework.CubismFramework;
 import com.live2d.sdk.cubism.framework.id.CubismId;
+import com.live2d.sdk.cubism.framework.math.CubismMath;
 import com.live2d.sdk.cubism.framework.rendering.CubismRenderer;
 import com.live2d.sdk.cubism.framework.rendering.CubismRenderer.CubismBlendMode;
+import com.live2d.sdk.cubism.framework.utils.CubismDebug;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -40,15 +42,15 @@ public class CubismModel {
         /**
          * Constructor
          *
-         * @param isOverwritten flag whether to be overwritten
+         * @param isOverridden flag whether to be overridden
          * @param color texture color
          * @throws IllegalArgumentException if an argument is null
          */
-        public DrawableColorData(boolean isOverwritten, CubismRenderer.CubismTextureColor color) {
+        public DrawableColorData(boolean isOverridden, CubismRenderer.CubismTextureColor color) {
             if (color == null) {
                 throw new IllegalArgumentException("color is null");
             }
-            this.isOverwritten = isOverwritten;
+            this.isOverridden = isOverridden;
             this.color = color;
         }
 
@@ -58,14 +60,14 @@ public class CubismModel {
          * @param data DrawableColorData instance to be copied
          */
         public DrawableColorData(DrawableColorData data) {
-            this.isOverwritten = data.isOverwritten;
+            this.isOverridden = data.isOverridden;
             this.color = data.color;
         }
 
         /**
-         * flag whether to be overwritten
+         * flag whether to be overridden
          */
-        public boolean isOverwritten;
+        public boolean isOverridden;
         /**
          * texture color
          */
@@ -86,14 +88,14 @@ public class CubismModel {
         /**
          * コンストラクタ
          *
-         * @param isOverwritten SDKで設定した色情報でパーツの描画色を上書きするか。trueなら上書きする。
+         * @param isOverridden SDKで設定した色情報でパーツの描画色を上書きするか。trueなら上書きする。
          * @param color 色情報
          */
-        public PartColorData(boolean isOverwritten, CubismRenderer.CubismTextureColor color) {
+        public PartColorData(boolean isOverridden, CubismRenderer.CubismTextureColor color) {
             if (color == null) {
                 throw new IllegalArgumentException("color is null");
             }
-            this.isOverwritten = isOverwritten;
+            this.isOverridden = isOverridden;
             this.color = color;
         }
 
@@ -103,14 +105,14 @@ public class CubismModel {
          * @param data コピーするPartColorDataインスタンス
          */
         public PartColorData(PartColorData data) {
-            this.isOverwritten = data.isOverwritten;
+            this.isOverridden = data.isOverridden;
             this.color = data.color;
         }
 
         /**
          * SDKで設定した色情報でパーツの描画色を上書きするか。trueなら上書きする。
          */
-        public boolean isOverwritten;
+        public boolean isOverridden;
 
         /**
          * パーツの色情報
@@ -130,23 +132,57 @@ public class CubismModel {
         /**
          * コンストラクタ
          *
-         * @param isOverWritten モデルのカリング設定を上書きするかどうか
+         * @param isOverridden モデルのカリング設定を上書きするかどうか
          * @param isCulling カリングするかどうか
          */
-        DrawableCullingData(boolean isOverWritten, boolean isCulling) {
-            this.isOverWritten = isOverWritten;
+        DrawableCullingData(boolean isOverridden, boolean isCulling) {
+            this.isOverridden = isOverridden;
             this.isCulling = isCulling;
         }
 
         /**
          * モデルのカリング設定を上書きするかどうか
          */
-        public boolean isOverWritten;
+        public boolean isOverridden;
         /**
          * カリングするかどうか
          */
         public boolean isCulling;
     }
+
+    /**
+     * Class for managing the override of parameter repetition settings
+     */
+    public static class ParameterRepeatData {
+        /**
+         * Constructor
+         */
+        public ParameterRepeatData() {
+            this.isOverridden = false;
+            this.isParameterRepeated = false;
+        }
+
+        /**
+         * Constructor
+         *
+         * @param isOverridden whether to be overriden
+         * @param isParameterRepeated override flag for settings
+         */
+        public ParameterRepeatData(boolean isOverridden, boolean isParameterRepeated) {
+            this.isOverridden = isOverridden;
+            this.isParameterRepeated = isParameterRepeated;
+        }
+
+        /**
+         * Whether to be overridden
+         */
+        public boolean isOverridden;
+
+        /**
+         * Override flag for settings
+         */
+        public boolean isParameterRepeated;
+    };
 
     /**
      * Update model's parameters.
@@ -278,6 +314,16 @@ public class CubismModel {
      */
     public int getPartCount() {
         return model.getPartViews().length;
+    }
+
+    /**
+     * Returns the indices of the parent parts for the parts.
+     *
+     * @return Indices of parent parts for the parts.
+     */
+    public int[] getPartParentPartIndices() {
+        final int[] partIndices = model.getParts().getParentPartIndices();
+        return partIndices;
     }
 
     /**
@@ -534,10 +580,11 @@ public class CubismModel {
         assert 0 <= parameterIndex && parameterIndex < getParameterCount();
 
         CubismParameterView parameter = parameterValues[parameterIndex];
-        if (parameter.getMaximumValue() < value) {
-            value = parameter.getMaximumValue();
-        } else if (parameter.getMinimumValue() > value) {
-            value = parameter.getMinimumValue();
+
+        if (isRepeat(parameterIndex)) {
+            value = getParameterRepeatValue(parameterIndex, value);
+        } else {
+            value = getParameterClampValue(parameterIndex, value);
         }
 
         final float parameterValue = parameter.getValue();
@@ -545,6 +592,107 @@ public class CubismModel {
                                              ? value
                                              : (parameterValue * (1.0f - weight)) + (value * weight);
         parameter.setValue(weightedParameterValue);
+    }
+
+    /**
+     * Gets whether the parameter has the repeat setting.
+     *
+     * @param parameterIndex Parameter index
+     *
+     * @return true if it is set, otherwise returns false.
+     */
+    public boolean isRepeat(int parameterIndex) {
+        if (notExistParameterIndices.contains(parameterIndex)) {
+            return false;
+        }
+
+        // Detect whether partIndex is not out of bounds index
+        assert 0 <= parameterIndex && parameterIndex < getParameterCount();
+
+        boolean isRepeat;
+
+        // Determines whether to perform parameter repeat processing
+        if (isOverriddenParameterRepeat || userParameterRepeatDataList.get(parameterIndex).isOverridden) {
+            // Use repeat information set on the SDK side
+            isRepeat = userParameterRepeatDataList.get(parameterIndex).isParameterRepeated;
+        } else {
+            // Use repeat information set in Editor
+            isRepeat = this.model.getParameters().getParameterRepeats()[parameterIndex];
+        }
+
+        return isRepeat;
+    }
+
+    /**
+     * Returns the calculated result ensuring the value falls within the parameter's range.
+     *
+     * @param parameterIndex Parameter index
+     * @param value Parameter value
+     *
+     * @return a value that falls within the parameter’s range. If the parameter does not exist, returns it as is.
+     */
+    public float getParameterRepeatValue(int parameterIndex, float value) {
+        if (this.notExistParameterIndices.contains(parameterIndex)) {
+            return value;
+        }
+        // In-index range detection
+        assert (0 <= parameterIndex && parameterIndex < getParameterCount());
+
+        final float maxValue = this.model.getParameters().getMaximumValues()[parameterIndex];
+        final float minValue = this.model.getParameters().getMinimumValues()[parameterIndex];
+        final float valueSize = maxValue - minValue;
+
+        if (maxValue < value) {
+            float overValue = CubismMath.modF(value - maxValue, valueSize);
+            if (!Float.isNaN(overValue)) {
+                value = minValue + overValue;
+            } else {
+                value = maxValue;
+            }
+        }
+        if (value < minValue) {
+            float overValue = CubismMath.modF(minValue - value, valueSize);
+            if (!Float.isNaN(overValue)) {
+                value = maxValue - overValue;
+            } else {
+                value = minValue;
+            }
+        }
+
+        return value;
+    }
+
+    /**
+     * Returns the result of clamping the value to ensure it falls within the parameter's range.
+     *
+     * @param parameterIndex Parameter index
+     * @param value Parameter value
+     *
+     * @return the clamped value. If the parameter does not exist, returns it as is.
+     */
+    public float getParameterClampValue(int parameterIndex, float value) {
+        if (notExistParameterIndices.contains(parameterIndex)) {
+            return value;
+        }
+
+        // In-index range detection
+        assert (0 <= parameterIndex && parameterIndex < this.getParameterCount());
+
+        final float maxValue = this.model.getParameters().getMaximumValues()[parameterIndex];
+        final float minValue = this.model.getParameters().getMinimumValues()[parameterIndex];
+
+        return CubismMath.clampF(value, minValue, maxValue);
+    }
+
+    /**
+     * Returns the repeat of the parameter.
+     *
+     * @param parameterIndex Parameter index
+     *
+     * @return the raw data parameter repeat from the Cubism Core.
+     */
+    public boolean getParameterRepeats(int parameterIndex) {
+        return this.model.getParameters().getParameterRepeats()[parameterIndex];
     }
 
     /**
@@ -1000,7 +1148,7 @@ public class CubismModel {
      * @return the multiply color
      */
     public CubismRenderer.CubismTextureColor getMultiplyColor(int drawableIndex) {
-        if (getOverwriteFlagForModelMultiplyColors() || getOverwriteFlagForDrawableMultiplyColors(drawableIndex)) {
+        if (getOverrideFlagForModelMultiplyColors() || getOverrideFlagForDrawableMultiplyColors(drawableIndex)) {
             return userDrawableMultiplyColors.get(drawableIndex).color;
         }
 
@@ -1024,7 +1172,7 @@ public class CubismModel {
      * @return the screen color
      */
     public CubismRenderer.CubismTextureColor getScreenColor(int drawableIndex) {
-        if (getOverwriteFlagForModelScreenColors() || getOverwriteFlagForDrawableScreenColors(drawableIndex)) {
+        if (getOverrideFlagForModelScreenColors() || getOverrideFlagForDrawableScreenColors(drawableIndex)) {
             return userDrawableScreenColors.get(drawableIndex).color;
         }
 
@@ -1162,10 +1310,34 @@ public class CubismModel {
     /**
      * Whether to override the entire model multiply color from the SDK.
      *
+     * @deprecated This function is deprecated due to a naming change, use getOverrideFlagForModelMultiplyColors() instead.
+     *
      * @return If the color information on the SDK is used, return true. If the color information of the model is used, return false.
      */
     public boolean getOverwriteFlagForModelMultiplyColors() {
-        return isOverwrittenModelMultiplyColors;
+        CubismDebug.cubismLogWarning("getOverwriteFlagForModelMultiplyColors() is a deprecated function. Please use getOverrideFlagForModelMultiplyColors().");
+        return getOverrideFlagForModelMultiplyColors();
+    }
+
+    /**
+     * Whether to override the entire model multiply color from the SDK.
+     *
+     * @return If the color information on the SDK is used, return true. If the color information of the model is used, return false.
+     */
+    public boolean getOverrideFlagForModelMultiplyColors() {
+        return isOverriddenModelMultiplyColors;
+    }
+
+    /**
+     * Whether to override the entire model screen color from the SDK.
+     *
+     * @deprecated This function is deprecated due to a naming change, use getOverrideFlagForModelScreenColors() instead.
+     *
+     * @return If the color information on the SDK is used, return true. If the color information of the model is used, return false.
+     */
+    public boolean getOverwriteFlagForModelScreenColors() {
+        CubismDebug.cubismLogWarning("getOverwriteFlagForModelScreenColors() is a deprecated function. Please use getOverrideFlagForModelScreenColors().");
+        return getOverrideFlagForModelScreenColors();
     }
 
     /**
@@ -1173,8 +1345,20 @@ public class CubismModel {
      *
      * @return If the color information on the SDK is used, return true. If the color information of the model is used, return false.
      */
-    public boolean getOverwriteFlagForModelScreenColors() {
-        return isOverwrittenModelScreenColors;
+    public boolean getOverrideFlagForModelScreenColors() {
+        return isOverriddenModelScreenColors;
+    }
+
+    /**
+     * Set the flag whether to override the entire model multiply color from the SDK.
+     *
+     * @deprecated This function is deprecated due to a naming change, use setOverrideFlagForModelMultiplyColors(boolean value) instead.
+     *
+     * @param value If the color information on the SDK is used, this value is true. If the color information of the model is used, this is false.
+     */
+    public void setOverwriteFlagForModelMultiplyColors(boolean value) {
+        CubismDebug.cubismLogWarning("setOverwriteFlagForModelMultiplyColors(boolean value) is a deprecated function. Please use setOverrideFlagForModelMultiplyColors(boolean value).");
+        setOverrideFlagForModelMultiplyColors(value);
     }
 
     /**
@@ -1182,8 +1366,20 @@ public class CubismModel {
      *
      * @param value If the color information on the SDK is used, this value is true. If the color information of the model is used, this is false.
      */
-    public void setOverwriteFlagForModelMultiplyColors(boolean value) {
-        isOverwrittenModelMultiplyColors = value;
+    public void setOverrideFlagForModelMultiplyColors(boolean value) {
+        isOverriddenModelMultiplyColors = value;
+    }
+
+    /**
+     * Set the flag whether to override the entire model screen color from the SDK.
+     *
+     * @deprecated This function is deprecated due to a naming change, use setOverrideFlagForModelScreenColors(boolean value) instead.
+     *
+     * @param value If the color information on the SDK is used, this value is true. If the color information of the model is used, this is false.
+     */
+    public void setOverwriteFlagForModelScreenColors(boolean value) {
+        CubismDebug.cubismLogWarning("setOverwriteFlagForModelScreenColors(boolean value) is a deprecated function. Please use setOverrideFlagForModelScreenColors(boolean value).");
+        setOverrideFlagForModelScreenColors(value);
     }
 
     /**
@@ -1191,8 +1387,20 @@ public class CubismModel {
      *
      * @param value If the color information on the SDK is used, this value is true. If the color information of the model is used, this is false.
      */
-    public void setOverwriteFlagForModelScreenColors(boolean value) {
-        isOverwrittenModelScreenColors = value;
+    public void setOverrideFlagForModelScreenColors(boolean value) {
+        isOverriddenModelScreenColors = value;
+    }
+
+    /**
+     * Whether to override the drawable multiply color from the SDK.
+     *
+     * @deprecated This function is deprecated due to a naming change, use getOverrideFlagForDrawableMultiplyColors(int drawableIndex) instead.
+     *
+     * @return If the color information on the SDK is used, return true. If the color information of the model is used, return false.
+     */
+    public boolean getOverwriteFlagForDrawableMultiplyColors(int drawableIndex) {
+        CubismDebug.cubismLogWarning("getOverwriteFlagForDrawableMultiplyColors(int drawableIndex) is a deprecated function. Please use getOverrideFlagForDrawableMultiplyColors(int drawableIndex).");
+        return getOverrideFlagForDrawableMultiplyColors(drawableIndex);
     }
 
     /**
@@ -1200,8 +1408,20 @@ public class CubismModel {
      *
      * @return If the color information on the SDK is used, return true. If the color information of the model is used, return false.
      */
-    public boolean getOverwriteFlagForDrawableMultiplyColors(int drawableIndex) {
-        return userDrawableMultiplyColors.get(drawableIndex).isOverwritten;
+    public boolean getOverrideFlagForDrawableMultiplyColors(int drawableIndex) {
+        return userDrawableMultiplyColors.get(drawableIndex).isOverridden;
+    }
+
+    /**
+     * Whether to override the drawable screen color from the SDK.
+     *
+     * @deprecated This function is deprecated due to a naming change, use getOverrideFlagForDrawableScreenColors(int drawableIndex) instead.
+     *
+     * @return If the color information on the SDK is used, return true. If the color information of the model is used, return false.
+     */
+    public boolean getOverwriteFlagForDrawableScreenColors(int drawableIndex) {
+        CubismDebug.cubismLogWarning("getOverwriteFlagForDrawableScreenColors(int drawableIndex) is a deprecated function. Please use getOverrideFlagForDrawableScreenColors(int drawableIndex).");
+        return getOverrideFlagForDrawableScreenColors(drawableIndex);
     }
 
     /**
@@ -1209,8 +1429,21 @@ public class CubismModel {
      *
      * @return If the color information on the SDK is used, return true. If the color information of the model is used, return false.
      */
-    public boolean getOverwriteFlagForDrawableScreenColors(int drawableIndex) {
-        return userDrawableScreenColors.get(drawableIndex).isOverwritten;
+    public boolean getOverrideFlagForDrawableScreenColors(int drawableIndex) {
+        return userDrawableScreenColors.get(drawableIndex).isOverridden;
+    }
+
+    /**
+     * SDKからPartの乗算色を上書きするかどうかのフラグを取得する。
+     *
+     * @deprecated This function is deprecated due to a naming change, use getOverrideColorForPartMultiplyColors(int partIndex) instead.
+     *
+     * @param partIndex 上書きするPartのインデックス
+     * @return SDKからPartの乗算色を上書きするか。上書きするならtrue。
+     */
+    public boolean getOverwriteColorForPartMultiplyColors(int partIndex) {
+        CubismDebug.cubismLogWarning("getOverwriteColorForPartMultiplyColors(int partIndex) is a deprecated function. Please use getOverrideColorForPartMultiplyColors(int partIndex).");
+        return getOverrideColorForPartMultiplyColors(partIndex);
     }
 
     /**
@@ -1219,8 +1452,21 @@ public class CubismModel {
      * @param partIndex 上書きするPartのインデックス
      * @return SDKからPartの乗算色を上書きするか。上書きするならtrue。
      */
-    public boolean getOverwriteColorForPartMultiplyColors(int partIndex) {
-        return userPartMultiplyColors.get(partIndex).isOverwritten;
+    public boolean getOverrideColorForPartMultiplyColors(int partIndex) {
+        return userPartMultiplyColors.get(partIndex).isOverridden;
+    }
+
+    /**
+     * SDKからPartのスクリーン色を上書きするかどうかのフラグを取得する。
+     *
+     * @deprecated This function is deprecated due to a naming change, use  getOverrideColorForPartScreenColors(int partIndex) instead.
+     *
+     * @param partIndex 上書きするPartのインデックス
+     * @return SDKからPartのスクリーン色を上書きするか。上書きするならtrue。
+     */
+    public boolean getOverwriteColorForPartScreenColors(int partIndex) {
+        CubismDebug.cubismLogWarning("getOverwriteColorForPartScreenColors(int partIndex) is a deprecated function. Please use getOverrideColorForPartScreenColors(int partIndex).");
+        return getOverrideColorForPartScreenColors(partIndex);
     }
 
     /**
@@ -1229,8 +1475,20 @@ public class CubismModel {
      * @param partIndex 上書きするPartのインデックス
      * @return SDKからPartのスクリーン色を上書きするか。上書きするならtrue。
      */
-    public boolean getOverwriteColorForPartScreenColors(int partIndex) {
-        return userPartScreenColors.get(partIndex).isOverwritten;
+    public boolean getOverrideColorForPartScreenColors(int partIndex) {
+        return userPartScreenColors.get(partIndex).isOverridden;
+    }
+
+    /**
+     * Set the flag whether to override the drawable multiply color from the SDK.
+     *
+     * @deprecated This function is deprecated due to a naming change, use setOverrideFlagForDrawableMultiplyColors(int drawableIndex, boolean value) instead.
+     *
+     * @param value If the color information on the SDK is used, this value is true. If the color information of the model is used, this is false.
+     */
+    public void setOverwriteFlagForDrawableMultiplyColors(int drawableIndex, boolean value) {
+        CubismDebug.cubismLogWarning("setOverwriteFlagForDrawableMultiplyColors(int drawableIndex, boolean value) is a deprecated function. Please use setOverrideFlagForDrawableMultiplyColors(int drawableIndex, boolean value).");
+        setOverrideFlagForDrawableMultiplyColors(drawableIndex, value);
     }
 
     /**
@@ -1238,8 +1496,20 @@ public class CubismModel {
      *
      * @param value If the color information on the SDK is used, this value is true. If the color information of the model is used, this is false.
      */
-    public void setOverwriteFlagForDrawableMultiplyColors(int drawableIndex, boolean value) {
-        userDrawableMultiplyColors.get(drawableIndex).isOverwritten = value;
+    public void setOverrideFlagForDrawableMultiplyColors(int drawableIndex, boolean value) {
+        userDrawableMultiplyColors.get(drawableIndex).isOverridden = value;
+    }
+
+    /**
+     * Set the flag whether to override the drawable screen color from the SDK.
+     *
+     * @deprecated This function is deprecated due to a naming change, use setOverrideFlagForDrawableScreenColors(int drawableIndex, boolean value) instead.
+     *
+     * @param value If the color information on the SDK is used, this value is true. If the color information of the model is used, this is false.
+     */
+    public void setOverwriteFlagForDrawableScreenColors(int drawableIndex, boolean value) {
+        CubismDebug.cubismLogWarning("setOverwriteFlagForDrawableScreenColors(int drawableIndex, boolean value) is a deprecated function. Please use setOverrideFlagForDrawableScreenColors(int drawableIndex, boolean value).");
+        setOverrideFlagForDrawableScreenColors(drawableIndex, value);
     }
 
     /**
@@ -1247,8 +1517,21 @@ public class CubismModel {
      *
      * @param value If the color information on the SDK is used, this value is true. If the color information of the model is used, this is false.
      */
-    public void setOverwriteFlagForDrawableScreenColors(int drawableIndex, boolean value) {
-        userDrawableScreenColors.get(drawableIndex).isOverwritten = value;
+    public void setOverrideFlagForDrawableScreenColors(int drawableIndex, boolean value) {
+        userDrawableScreenColors.get(drawableIndex).isOverridden = value;
+    }
+
+    /**
+     * SDKからPartの乗算色を上書きするかどうかのフラグを設定する。
+     *
+     * @deprecated This function is deprecated due to a naming change, use setOverrideColorForPartMultiplyColors(int partIndex, boolean value) instead.
+     *
+     * @param partIndex 上書きするPartのインデックス
+     * @param value SDKからPartの乗算色を上書きするかどうか。trueなら上書きする。
+     */
+    public void setOverwriteColorForPartMultiplyColors(int partIndex, boolean value) {
+        CubismDebug.cubismLogWarning("setOverwriteColorForPartMultiplyColors(int partIndex, boolean value) is a deprecated function. Please use setOverrideColorForPartMultiplyColors(int partIndex, boolean value).");
+        setOverrideColorForPartMultiplyColors(partIndex, value);
     }
 
     /**
@@ -1257,9 +1540,22 @@ public class CubismModel {
      * @param partIndex 上書きするPartのインデックス
      * @param value SDKからPartの乗算色を上書きするかどうか。trueなら上書きする。
      */
-    public void setOverwriteColorForPartMultiplyColors(int partIndex, boolean value) {
-        userPartMultiplyColors.get(partIndex).isOverwritten = value;
-        setOverwriteColorsForPartColors(partIndex, value, userPartMultiplyColors, userDrawableMultiplyColors);
+    public void setOverrideColorForPartMultiplyColors(int partIndex, boolean value) {
+        userPartMultiplyColors.get(partIndex).isOverridden = value;
+        setOverrideColorsForPartColors(partIndex, value, userPartMultiplyColors, userDrawableMultiplyColors);
+    }
+
+    /**
+     * SDKからPartのスクリーン色を上書きするかどうかのフラグを設定する。
+     *
+     * @deprecated This function is deprecated due to a naming change, use setOverrideColorForPartScreenColors(int partIndex, boolean value) instead.
+     *
+     * @param partIndex 上書きするPartのインデックス
+     * @param value SDKからPartのスクリーン色を上書きするかどうか。trueなら上書きする。
+     */
+    public void setOverwriteColorForPartScreenColors(int partIndex, boolean value) {
+        CubismDebug.cubismLogWarning("setOverwriteColorForPartScreenColors(int partIndex, boolean value) is a deprecated function. Please use setOverrideColorForPartScreenColors(int partIndex, boolean value).");
+        setOverrideColorForPartScreenColors(partIndex, value);
     }
 
     /**
@@ -1268,9 +1564,9 @@ public class CubismModel {
      * @param partIndex 上書きするPartのインデックス
      * @param value SDKからPartのスクリーン色を上書きするかどうか。trueなら上書きする。
      */
-    public void setOverwriteColorForPartScreenColors(int partIndex, boolean value) {
-        userPartScreenColors.get(partIndex).isOverwritten = value;
-        setOverwriteColorsForPartColors(partIndex, value, userPartScreenColors, userDrawableScreenColors);
+    public void setOverrideColorForPartScreenColors(int partIndex, boolean value) {
+        userPartScreenColors.get(partIndex).isOverridden = value;
+        setOverrideColorsForPartColors(partIndex, value, userPartScreenColors, userDrawableScreenColors);
     }
 
     /**
@@ -1280,7 +1576,7 @@ public class CubismModel {
      * @return the culling inforamtion of Drawable
      */
     public boolean getDrawableCulling(int drawableIndex) {
-        if (getOverwriteFlagForModelCullings() || getOverwriteFlagForDrawableCullings(drawableIndex)) {
+        if (getOverrideFlagForModelCullings() || getOverrideFlagForDrawableCullings(drawableIndex)) {
             return userCullings.get(drawableIndex).isCulling;
         }
 
@@ -1299,12 +1595,84 @@ public class CubismModel {
     }
 
     /**
+     * Checks whether parameter repetition is performed for the entire model.
+     *
+     * @return true if parameter repetition is performed for the entire model; otherwise returns false.
+     */
+    public boolean getOverrideFlagForModelParameterRepeat() {
+        return isOverriddenParameterRepeat;
+    }
+
+    /**
+     * Sets whether parameter repetition is performed for the entire model.
+     * Use true to perform parameter repetition for the entire model, or false to not perform it.
+     */
+    public void setOverrideFlagForModelParameterRepeat(boolean isRepeat) {
+        isOverriddenParameterRepeat = isRepeat;
+    }
+
+    /**
+     * Sets the flag indicating whether to override the parameter repeat.
+     *
+     * @param parameterIndex Parameter index
+     * @param value true if it is to be overridden; otherwise, false.
+     */
+    public void setOverrideFlagForParameterRepeat(int parameterIndex, boolean value) {
+        this.userParameterRepeatDataList.get(parameterIndex).isOverridden = value;
+    }
+
+    /**
+     * Returns the repeat flag.
+     *
+     * @param parameterIndex Parameter index
+     *
+     * @return true if repeating, false otherwise.
+     */
+    public boolean getRepeatFlagForParameterRepeat(int parameterIndex) {
+        return this.userParameterRepeatDataList.get(parameterIndex).isParameterRepeated;
+    }
+
+    /**
+     * Sets the repeat flag.
+     *
+     * @param parameterIndex Parameter index
+     * @param value true to enable repeating, false otherwise.
+     */
+    public void setRepeatFlagForParameterRepeat(int parameterIndex, boolean value) {
+        this.userParameterRepeatDataList.get(parameterIndex).isParameterRepeated = value;
+    }
+
+    /**
      * SDKからモデル全体のカリング設定を上書きするか
+     *
+     * @deprecated This function is deprecated due to a naming change, use getOverrideFlagForModelCullings() instead.
      *
      * @return trueならSDK上のカリング設定を使用し、falseならモデルのカリング設定を使用する
      */
     public boolean getOverwriteFlagForModelCullings() {
-        return isOverwrittenCullings;
+        CubismDebug.cubismLogWarning("getOverwriteFlagForModelCullings() is a deprecated function. Please use getOverrideFlagForModelCullings().");
+        return getOverrideFlagForModelCullings();
+    }
+
+    /**
+     * SDKからモデル全体のカリング設定を上書きするか
+     *
+     * @return trueならSDK上のカリング設定を使用し、falseならモデルのカリング設定を使用する
+     */
+    public boolean getOverrideFlagForModelCullings() {
+        return isOverriddenCullings;
+    }
+
+    /**
+     * SDK上からモデル全体のカリング設定を上書きするかをセットする
+     *
+     * @deprecated This function is deprecated due to a naming change, use setOverrideFlagForModelCullings(boolean value) instead.
+     *
+     * @param value SDK上のカリング設定を使うならtrue, モデルのカリング設定を使うならfalse
+     */
+    public void setOverwriteFlagForModelCullings(boolean value) {
+        CubismDebug.cubismLogWarning("setOverwriteFlagForModelCullings(boolean value) is a deprecated function. Please use setOverrideFlagForModelCullings(boolean value).");
+        setOverrideFlagForModelCullings(value);
     }
 
     /**
@@ -1312,8 +1680,21 @@ public class CubismModel {
      *
      * @param value SDK上のカリング設定を使うならtrue, モデルのカリング設定を使うならfalse
      */
-    public void setOverwriteFlagForModelCullings(boolean value) {
-        isOverwrittenCullings = value;
+    public void setOverrideFlagForModelCullings(boolean value) {
+        isOverriddenCullings = value;
+    }
+
+    /**
+     * SDKからdrawableのカリング設定を上書きするか
+     *
+     * @deprecated This function is deprecated due to a naming change, use getOverrideFlagForDrawableCullings(int drawableIndex) instead.
+     *
+     * @param drawableIndex drawableのインデックス
+     * @return trueならSDK上のカリング設定を使用し、falseならモデルのカリング設定を使用する
+     */
+    public boolean getOverwriteFlagForDrawableCullings(int drawableIndex) {
+        CubismDebug.cubismLogWarning("getOverwriteFlagForDrawableCullings(int drawableIndex) is a deprecated function. Please use getOverrideFlagForDrawableCullings(int drawableIndex).");
+        return getOverrideFlagForDrawableCullings(drawableIndex);
     }
 
     /**
@@ -1322,8 +1703,21 @@ public class CubismModel {
      * @param drawableIndex drawableのインデックス
      * @return trueならSDK上のカリング設定を使用し、falseならモデルのカリング設定を使用する
      */
-    public boolean getOverwriteFlagForDrawableCullings(int drawableIndex) {
-        return userCullings.get(drawableIndex).isOverWritten;
+    public boolean getOverrideFlagForDrawableCullings(int drawableIndex) {
+        return userCullings.get(drawableIndex).isOverridden;
+    }
+
+    /**
+     * SDKからdrawableのカリング設定を上書きするかをセットする
+     *
+     * @deprecated This function is deprecated due to a naming change, use setOverrideFlagForDrawableCullings(int drawableIndex, boolean value) instead.
+     *
+     * @param drawableIndex drawableのインデックス
+     * @param value SDK上のカリング設定を使うならtrue, モデルのカリング設定を使うならfalse
+     */
+    public void setOverwriteFlagForDrawableCullings(int drawableIndex, boolean value) {
+        CubismDebug.cubismLogWarning("setOverwriteFlagForDrawableCullings(int drawableIndex, boolean value) is a deprecated function. Please use setOverrideFlagForDrawableCullings(int drawableIndex, boolean value).");
+        setOverrideFlagForDrawableCullings(drawableIndex, value);
     }
 
     /**
@@ -1332,8 +1726,8 @@ public class CubismModel {
      * @param drawableIndex drawableのインデックス
      * @param value SDK上のカリング設定を使うならtrue, モデルのカリング設定を使うならfalse
      */
-    public void setOverwriteFlagForDrawableCullings(int drawableIndex, boolean value) {
-        userCullings.get(drawableIndex).isOverWritten = value;
+    public void setOverrideFlagForDrawableCullings(int drawableIndex, boolean value) {
+        userCullings.get(drawableIndex).isOverridden = value;
     }
 
     /**
@@ -1387,6 +1781,7 @@ public class CubismModel {
             String id = parameterValue.getId();
 
             parameterIds.add(CubismFramework.getIdManager().getId(id));
+            userParameterRepeatDataList.add(new ParameterRepeatData(false, false));
         }
 
         // Set part IDs to _partIds.
@@ -1470,7 +1865,7 @@ public class CubismModel {
     }
 
     /**
-     * PartのOverwriteColorを設定する。
+     * PartのOverrideColorを設定する。
      *
      * @param partIndex 設定するPartのインデックス
      * @param r 赤
@@ -1491,7 +1886,7 @@ public class CubismModel {
         partColors.get(partIndex).color.b = b;
         partColors.get(partIndex).color.a = a;
 
-        if (partColors.get(partIndex).isOverwritten) {
+        if (partColors.get(partIndex).isOverridden) {
             List<Integer> childDrawables = partChildDrawablesMap.get(partIndex);
             if(childDrawables == null) return;
 
@@ -1507,27 +1902,27 @@ public class CubismModel {
     }
 
     /**
-     * PartのOverwriteFlagを設定する。
+     * PartのOverrideFlagを設定する。
      *
      * @param partIndex 設定するPartのインデックス
      * @param value 真偽値
      * @param partColors 設定するPartの上書き色のリスト
      * @param drawableColors Drawableの上書き色のリスト
      */
-    private void setOverwriteColorsForPartColors(
+    private void setOverrideColorsForPartColors(
         int partIndex,
         boolean value,
         List<PartColorData> partColors,
         List<DrawableColorData> drawableColors
     ) {
-        partColors.get(partIndex).isOverwritten = value;
+        partColors.get(partIndex).isOverridden = value;
 
         List<Integer> childDrawables = partChildDrawablesMap.get(partIndex);
         if (childDrawables == null) return;
 
         for (int i = 0; i < childDrawables.size(); i++) {
             int drawableIndex = childDrawables.get(i);
-            drawableColors.get(drawableIndex).isOverwritten = value;
+            drawableColors.get(drawableIndex).isOverridden = value;
 
             if (value) {
                 drawableColors.get(drawableIndex).color.r = partColors.get(partIndex).color.r;
@@ -1604,16 +1999,27 @@ public class CubismModel {
      * カリング設定のリスト
      */
     private final List<DrawableCullingData> userCullings = new ArrayList<DrawableCullingData>();
+
     /**
-     * Flag whether to overwrite all the multiply colors
+     * List to manage ParameterRepeat and Override flag to be set for each Parameter
      */
-    private boolean isOverwrittenModelMultiplyColors;
+    private final List<ParameterRepeatData> userParameterRepeatDataList = new ArrayList<ParameterRepeatData>();
+
     /**
-     * Flag whether to overwrite all the screen colors
+     * Flag whether to Override all the parameter repeat
      */
-    private boolean isOverwrittenModelScreenColors;
+    private boolean isOverriddenParameterRepeat = true;
+
+    /**
+     * Flag whether to override all the multiply colors
+     */
+    private boolean isOverriddenModelMultiplyColors;
+    /**
+     * Flag whether to override all the screen colors
+     */
+    private boolean isOverriddenModelScreenColors;
     /**
      * モデルのカリング設定をすべて上書きするか？
      */
-    private boolean isOverwrittenCullings;
+    private boolean isOverriddenCullings;
 }

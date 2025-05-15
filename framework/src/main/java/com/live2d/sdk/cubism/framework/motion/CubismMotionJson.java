@@ -9,6 +9,8 @@ package com.live2d.sdk.cubism.framework.motion;
 
 import com.live2d.sdk.cubism.framework.CubismFramework;
 import com.live2d.sdk.cubism.framework.id.CubismId;
+import com.live2d.sdk.cubism.framework.motion.CubismMotionInternal.CubismMotionSegmentType;
+import com.live2d.sdk.cubism.framework.utils.CubismDebug;
 import com.live2d.sdk.cubism.framework.utils.jsonparser.CubismJson;
 
 /**
@@ -48,6 +50,72 @@ public class CubismMotionJson {
      */
     public boolean isMotionLoop() {
         return json.getRoot().get(JsonKey.META.key).get(JsonKey.LOOP.key).toBoolean();
+    }
+
+    /**
+     *  Returns the consistency of the motion3.json file.
+     *
+     * @return true if the file is consistent; otherwise returns false.
+     */
+    public boolean hasConsistency() {
+        boolean result = true;
+
+        final int actualCurveListSize = json.getRoot().get(JsonKey.CURVES.key).getList().size();
+        int actualTotalSegmentCount = 0;
+        int actualTotalPointCount = 0;
+
+        // Counting.
+        for (int curvePosition = 0; curvePosition < actualCurveListSize; ++curvePosition) {
+            for (int segmentPosition = 0; segmentPosition < getMotionCurveSegmentCount(curvePosition);) {
+
+                if (segmentPosition == 0) {
+                    actualTotalPointCount += 1;
+                    segmentPosition += 2;
+                }
+
+                final CubismMotionSegmentType segment = getMotionCurveSegmentType(curvePosition, segmentPosition);
+
+                switch (segment) {
+                    case LINEAR:
+                        actualTotalPointCount += 1;
+                        segmentPosition += 3;
+                        break;
+                    case BEZIER:
+                        actualTotalPointCount += 3;
+                        segmentPosition += 7;
+                        break;
+                    case STEPPED:
+                        actualTotalPointCount += 1;
+                        segmentPosition += 3;
+                        break;
+                    case INVERSESTEPPED:
+                        actualTotalPointCount += 1;
+                        segmentPosition += 3;
+                        break;
+                    default:
+                        assert(false);
+                        break;
+                }
+
+                ++actualTotalSegmentCount;
+            }
+        }
+
+        // Check that the counts match the metadata.
+        if (actualCurveListSize != getMotionCurveCount()) {
+            CubismDebug.cubismLogWarning("The number of curves does not match the metadata.");
+            result = false;
+        }
+        if (actualTotalSegmentCount != getMotionTotalSegmentCount()) {
+            CubismDebug.cubismLogWarning("The number of segment does not match the metadata.");
+            result = false;
+        }
+        if (actualTotalPointCount != getMotionTotalPointCount()) {
+            CubismDebug.cubismLogWarning("The number of point does not match the metadata.");
+            result = false;
+        }
+
+        return result;
     }
 
     /**
@@ -214,6 +282,31 @@ public class CubismMotionJson {
      */
     public float getMotionCurveSegment(int curveIndex, int segmentIndex) {
         return json.getRoot().get(JsonKey.CURVES.key).get(curveIndex).get(JsonKey.SEGMENTS.key).get(segmentIndex).toFloat();
+    }
+
+    /**
+     * Get the type of a segment of a motion curve.
+     *
+     * @param curveIndex index of curve
+     * @param segmentIndex index of segment
+     * @return the type of segment
+     */
+    public CubismMotionSegmentType getMotionCurveSegmentType(final int curveIndex, final int segmentIndex) {
+        final int segmentTypeValue = (int) (getMotionCurveSegment(curveIndex, segmentIndex));
+
+        switch (segmentTypeValue) {
+            case 0:
+                return CubismMotionSegmentType.LINEAR;
+            case 1:
+                return CubismMotionSegmentType.BEZIER;
+            case 2:
+                return CubismMotionSegmentType.STEPPED;
+            case 3:
+                return CubismMotionSegmentType.INVERSESTEPPED;
+            default:
+                assert (false);
+                return null;
+        }
     }
 
     /**
