@@ -13,21 +13,12 @@ import java.nio.ShortBuffer;
 class CubismDrawableInfoCachesHolder {
     public CubismDrawableInfoCachesHolder(CubismModel model) {
         final int drawableCount = model.getDrawableCount();
-        final int[] renderOrder = model.getDrawableRenderOrders();
-        final int[] sortedDrawableIndexList = new int[drawableCount];
 
-        // Sort the index by drawing order
-        for (int i = 0; i < drawableCount; i++) {
-            final int order = renderOrder[i];
-            sortedDrawableIndexList[order] = i;
-        }
         vertexArrayCaches = new FloatBuffer[drawableCount];
         uvArrayCaches = new FloatBuffer[drawableCount];
         indexArrayCaches = new ShortBuffer[drawableCount];
 
-        for (int i = 0; i < drawableCount; i++) {
-            final int drawableIndex = sortedDrawableIndexList[i];
-
+        for (int drawableIndex = 0; drawableIndex < drawableCount; drawableIndex++) {
             // Vertex Array
             {
                 float[] vertexArray = model.getDrawableVertices(drawableIndex);

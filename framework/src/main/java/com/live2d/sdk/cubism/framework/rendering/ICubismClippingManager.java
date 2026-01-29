@@ -7,6 +7,7 @@
 
 package com.live2d.sdk.cubism.framework.rendering;
 
+import com.live2d.sdk.cubism.framework.math.CubismMatrix44;
 import com.live2d.sdk.cubism.framework.math.CubismVector2;
 import com.live2d.sdk.cubism.framework.model.CubismModel;
 import com.live2d.sdk.cubism.framework.type.csmRectF;
@@ -27,13 +28,27 @@ public interface ICubismClippingManager {
 
     /**
      * マネージャーの初期化処理
-     * クリッピングマスクを使う描画オブジェクトの登録を行う。
+     * クリッピングマスクを使うDrawableオブジェクトの登録を行う。
      *
      * @param type               レンダラーの種類
      * @param model              モデルのインスタンス
      * @param maskBufferCount    バッファの生成数
      */
-    void initialize(
+    void initializeForDrawable(
+        CubismRenderer.RendererType type,
+        CubismModel model,
+        int maskBufferCount
+    );
+
+    /**
+     * マネージャーの初期化処理
+     * クリッピングマスクを使うOffscreenオブジェクトの登録を行う。
+     *
+     * @param type            レンダラーの種類
+     * @param model           モデルのインスタンス
+     * @param maskBufferCount バッファの生成数
+     */
+    void initializeForOffscreen(
         CubismRenderer.RendererType type,
         CubismModel model,
         int maskBufferCount
@@ -45,7 +60,20 @@ public interface ICubismClippingManager {
      * @param model         モデルのインスタンス
      * @param isRightHanded 処理が右手系かどうか。右手系ならtrue
      */
-    void setupMatrixForHighPrecision(CubismModel model, boolean isRightHanded);
+    void setupMatrixForDrawableHighPrecision(CubismModel model, boolean isRightHanded);
+
+    /**
+     * offscreenの高精細マスク処理用の行列を計算する。
+     *
+     * @param model         モデルのインスタンス
+     * @param isRightHanded 処理系が右手系かどうか。右手系ならtrue
+     * @param mvp           MVP行列
+     */
+    void setupMatrixForOffscreenHighPrecision(
+        CubismModel model,
+        boolean isRightHanded,
+        final CubismMatrix44 mvp
+    );
 
     /**
      * マスク作成・描画用の行列を作成する。

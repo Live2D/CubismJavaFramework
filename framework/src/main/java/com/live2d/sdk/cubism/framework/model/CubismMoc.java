@@ -75,6 +75,21 @@ public class CubismMoc {
     }
 
     /**
+     * Returns the version of the unload MOC file.
+     *
+     * @param mocBytes Buffer containing the loaded MOC file
+     * @return Version
+     */
+    public static int getMocVersionFromBuffer(final byte[] mocBytes) {
+        if (mocBytes == null) {
+            CubismDebug.cubismLogError("Invalid mocBytes.");
+            return 0;
+        }
+
+        return Live2DCubismCore.getMocVersion(mocBytes);
+    }
+
+    /**
      * .moc3ファイルがロードされたメモリを参照し、フォーマットが正しいかチェックする。（不正なファイルかどうかのチェック）
      * Native CoreのcsmHasMocConsistencyに対応する。
      *

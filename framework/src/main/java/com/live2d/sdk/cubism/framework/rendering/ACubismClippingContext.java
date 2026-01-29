@@ -69,12 +69,21 @@ public abstract class ACubismClippingContext {
     }
 
     /**
-     * このマスクにクリップされる描画オブジェクトを追加する
+     * このマスクにクリップされるDrawableを追加する
      *
-     * @param drawableIndex クリッピング対象に追加する描画オブジェクトのインデックス
+     * @param drawableIndex クリッピング対象に追加するDrawableのインデックス
      */
     public void addClippedDrawable(int drawableIndex) {
         clippedDrawableIndexList.add(drawableIndex);
+    }
+
+    /**
+     * このマスクにクリップされるOffscreenを追加する。
+     *
+     * @param offscreenIndex クリッピング対象に追加するOffscreenのインデックス
+     */
+    public void addClippedOffscreen(int offscreenIndex) {
+        clippedOffscreenIndexList.add(offscreenIndex);
     }
 
     /**
@@ -120,10 +129,17 @@ public abstract class ACubismClippingContext {
      * 描画オブジェクトの位置計算結果を保持する行列
      */
     public final CubismMatrix44 matrixForDraw = CubismMatrix44.create();
+
     /**
      * このマスクにクリップされる描画オブジェクトのリスト
      */
     public final List<Integer> clippedDrawableIndexList = new ArrayList<>();
+
+    /**
+     * このマスクにクリップされるOffscreenのリスト
+     */
+    public final List<Integer> clippedOffscreenIndexList = new ArrayList<>();
+
     /**
      * このマスクが割り当てられるレンダーテクスチャ（フレームバッファ）やカラーバッファのインデックス
      */

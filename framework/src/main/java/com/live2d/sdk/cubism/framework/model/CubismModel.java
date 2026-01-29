@@ -13,6 +13,7 @@ import com.live2d.sdk.cubism.framework.id.CubismId;
 import com.live2d.sdk.cubism.framework.math.CubismMath;
 import com.live2d.sdk.cubism.framework.rendering.CubismRenderer;
 import com.live2d.sdk.cubism.framework.rendering.CubismRenderer.CubismBlendMode;
+import com.live2d.sdk.cubism.framework.rendering.csmBlendMode;
 import com.live2d.sdk.cubism.framework.utils.CubismDebug;
 
 import java.util.ArrayList;
@@ -20,16 +21,127 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static com.live2d.sdk.cubism.core.CubismDrawableFlag.ConstantFlag.*;
-import static com.live2d.sdk.cubism.core.CubismDrawableFlag.DynamicFlag.*;
-
-
 /**
  * Model class created from Mclapoc data.
  */
 public class CubismModel {
     /**
-     * Inner class for handling texture colors in RGBA
+     * Enumeration defining index values that indicate the non-existence of objects.
+     */
+    public enum CubismNoIndex {
+        /**
+         * Index value when no parent exists.
+         */
+        PARENT(-1),
+        /**
+         * Index value when no referenced offscreen exists.
+         */
+        OFFSCREEN(-1);
+
+        public final int index;
+
+        CubismNoIndex(int index) {
+            this.index = index;
+        }
+    }
+
+    /**
+     * Structure for color information of drawing object.
+     */
+    public static class ColorData {
+        /**
+         * Constructor.
+         */
+        public ColorData() {
+            this.isOverridden = false;
+            this.color = new CubismRenderer.CubismTextureColor();
+        }
+
+        /**
+         * Constructor.
+         *
+         * @param isOverridden whether to be overridden
+         * @param color        texture color
+         */
+        public ColorData(boolean isOverridden, CubismRenderer.CubismTextureColor color) {
+            this.isOverridden = isOverridden;
+            this.color = new CubismRenderer.CubismTextureColor(color);
+        }
+
+        /**
+         * Copy constructor.
+         *
+         * @param other the ColorData object to copy from
+         */
+        public ColorData(ColorData other) {
+            this.isOverridden = other.isOverridden;
+            this.color = new CubismRenderer.CubismTextureColor(
+                other.color.r,
+                other.color.g,
+                other.color.b,
+                other.color.a
+            );
+        }
+
+        /**
+         * Whether to be overridden.
+         */
+        public boolean isOverridden;
+
+        /**
+         * Color.
+         */
+        public CubismRenderer.CubismTextureColor color;
+    }
+
+    /**
+     * Structure to manage texture culling settings.
+     */
+    public static class CullingData {
+        /**
+         * Constructor.
+         */
+        public CullingData() {
+            this.isOverridden = false;
+            this.isCulling = false;
+        }
+
+        /**
+         * Constructor.
+         *
+         * @param isOverridden whether to be overridden
+         * @param isCulling    whether to be culling
+         */
+        public CullingData(boolean isOverridden, boolean isCulling) {
+            this.isOverridden = isOverridden;
+            this.isCulling = isCulling;
+        }
+
+        /**
+         * Copy constructor.
+         *
+         * @param other the CullingData object to copy from
+         */
+        public CullingData(CullingData other) {
+            this.isOverridden = other.isOverridden;
+            this.isCulling = other.isCulling;
+        }
+
+        /**
+         * Whether to be overridden.
+         */
+        public boolean isOverridden;
+
+        /**
+         * Whether to be culling.
+         */
+        public boolean isCulling;
+    }
+
+    /**
+     * (deprecated) Structure for color information of drawing object
+     *
+     * @deprecated This class is deprecated. Please use {@link ColorData} instead.
      */
     public static class DrawableColorData {
         /**
@@ -75,7 +187,9 @@ public class CubismModel {
     }
 
     /**
-     * パーツの色をRGBAで扱うための内部クラス
+     * (deprecated) Structure to handle texture color in RGBA.
+     *
+     * @deprecated This class is deprecated. Please use {@link ColorData} instead.
      */
     public static class PartColorData {
         /**
@@ -121,7 +235,9 @@ public class CubismModel {
     }
 
     /**
-     * テクスチャのカリング設定を管理するための内部クラス
+     * (deprecated) Structure to manage texture culling settings
+     *
+     * @deprecated This class is deprecated. Please use {@link CullingData} instead.
      */
     public static class DrawableCullingData {
         /**
@@ -182,7 +298,134 @@ public class CubismModel {
          * Override flag for settings
          */
         public boolean isParameterRepeated;
-    };
+    }
+
+    /**
+     * Information for part child draw objects.
+     */
+    public static class PartChildDrawObjects {
+        /**
+         * Constructor.
+         */
+        public PartChildDrawObjects() {
+            drawableIndices = new ArrayList<>();
+            offscreenIndices = new ArrayList<>();
+        }
+
+        /**
+         * Constructor.
+         *
+         * @param drawableIndices  collection of Drawable indices
+         * @param offscreenIndices collection of Offscreen indices
+         */
+        public PartChildDrawObjects(List<Integer> drawableIndices, List<Integer> offscreenIndices) {
+            this.drawableIndices = new ArrayList<>(drawableIndices);
+            this.offscreenIndices = new ArrayList<>(offscreenIndices);
+        }
+
+        /**
+         * Copy constructor.
+         *
+         * @param other the PartChildDrawObjects object to copy from
+         */
+        public PartChildDrawObjects(PartChildDrawObjects other) {
+            this.drawableIndices = new ArrayList<>(other.drawableIndices);
+            this.offscreenIndices = new ArrayList<>(other.offscreenIndices);
+        }
+
+        /**
+         * Collection of Drawable indices.
+         */
+        public List<Integer> drawableIndices;
+
+        /**
+         * Collection of Offscreen indices.
+         */
+        public List<Integer> offscreenIndices;
+    }
+
+    /**
+     * Information for a Cubism model object.
+     */
+    public static class CubismModelObjectInfo {
+        /**
+         * Type used in object information.
+         */
+        public enum ObjectType {
+            DRAWABLE(0),
+            PARTS(1);
+
+            public final int index;
+
+            ObjectType(int index) {
+                this.index = index;
+            }
+        }
+
+        /**
+         * Constructor.
+         *
+         * @param objectIndex index of the object
+         * @param type        type of the object (Drawable, Parts)
+         */
+        public CubismModelObjectInfo(int objectIndex, ObjectType type) {
+            this.objectIndex = objectIndex;
+            this.objectType = type;
+        }
+
+        /**
+         * Type of the object (Drawable, Parts).
+         */
+        public ObjectType objectType;
+
+        /**
+         * Index of the object.
+         */
+        public int objectIndex;
+    }
+
+    /**
+     * Information for a Cubism model part.
+     */
+    public static class CubismModelPartInfo {
+        /**
+         * Constructor.
+         */
+        public CubismModelPartInfo() {
+            objects = new ArrayList<>();
+            childDrawObjects = new PartChildDrawObjects();
+        }
+
+        /**
+         * Constructor
+         *
+         * @param objects          collection of CubismModelObjectInfo
+         * @param childDrawObjects information of part child draw objects
+         */
+        public CubismModelPartInfo(List<CubismModelObjectInfo> objects, PartChildDrawObjects childDrawObjects) {
+            this.objects = new ArrayList<>(objects);
+            this.childDrawObjects = new PartChildDrawObjects(childDrawObjects);
+        }
+
+        /**
+         * Collection of object information.
+         */
+        public List<CubismModelObjectInfo> objects;
+
+        /**
+         * Information of part child draw objects.
+         */
+        public PartChildDrawObjects childDrawObjects;
+
+        /**
+         * Returns the number of child objects.
+         *
+         * @return number of child objects
+         */
+        public int getChildObjectCount() {
+            return objects.size();
+        }
+    }
 
     /**
      * Update model's parameters.
@@ -265,6 +508,16 @@ public class CubismModel {
     }
 
     /**
+     * Returns the array of object render orders.
+     *
+     * @return array of object render orders
+     */
+    public int[] getRenderOrders() {
+        final int[] renderOrders = model.getRenderOrders();
+        return renderOrders;
+    }
+
+    /**
      * Get the index of parts.
      *
      * @param partId parts ID
@@ -326,6 +579,15 @@ public class CubismModel {
         return partIndices;
     }
 
+    /**
+     * Returns the index of the offscreen sources for the part.
+     *
+     * @return index of offscreen sources for the part
+     */
+    public int[] getPartOffscreenIndices() {
+        final int[] offscreenSourcesIndices = model.getParts().getOffscreenIndices();
+        return offscreenSourcesIndices;
+    }
     /**
      * Set an opacity of the part.
      *
@@ -399,6 +661,79 @@ public class CubismModel {
 
         return partValues[partIndex].getOpacity();
     }
+
+    /**
+     * Returns the index of the parent part of the part.
+     *
+     * @param partIndex part index
+     * @return index of the parent part of the part
+     */
+    public int getPartParentPartIndex(int partIndex) {
+        return model.getParts().getParentPartIndices()[partIndex];
+    }
+
+    /**
+     * Returns the child draw objects of the part.
+     *
+     * @param partInfoIndex index of the part info
+     */
+    public void getPartChildDrawObjects(int partInfoIndex) {
+        if (partsHierarchy.get(partInfoIndex).getChildObjectCount() < 1) {
+            return;
+        }
+
+        PartChildDrawObjects childDrawObjects = partsHierarchy.get(partInfoIndex).childDrawObjects;
+
+        // 既にchildDrawObjectsが処理されている場合はスキップ
+        if (childDrawObjects.drawableIndices.size() != 0 || childDrawObjects.offscreenIndices.size() != 0) {
+            return;
+        }
+
+        List<CubismModelObjectInfo> objects = partsHierarchy.get(partInfoIndex).objects;
+
+        for (int i = 0; i < objects.size(); i++) {
+            if (objects.get(i).objectType == CubismModelObjectInfo.ObjectType.PARTS) {
+                // 子のパーツの場合、再帰的に子objectsを取得
+                getPartChildDrawObjects(objects.get(i).objectIndex);
+
+                // 子パーツの子Drawable, Offscreenを取得
+                final int objectIndex = objects.get(i).objectIndex;
+                PartChildDrawObjects childToChildDrawObjects = partsHierarchy.get(objectIndex).childDrawObjects;
+
+                for (int j = 0; j < childToChildDrawObjects.drawableIndices.size(); j++) {
+                    // 孫Drawableをパーツの子Drawableに追加
+                    childDrawObjects.drawableIndices.add(childToChildDrawObjects.drawableIndices.get(j));
+                }
+                for (int j = 0; j < childToChildDrawObjects.offscreenIndices.size(); j++) {
+                    // 孫Offscreenをパーツの子Offscreenに追加
+                    childDrawObjects.offscreenIndices.add(childToChildDrawObjects.offscreenIndices.get(j));
+                }
+
+                // Offscreenの確認
+                int offscreenIndex = model.getParts().getOffscreenIndices()[objects.get(i).objectIndex];
+                if (offscreenIndex != CubismNoIndex.OFFSCREEN.index) {
+                    // Offscreenが存在する場合、パーツの子Offscreenに追加
+                    childDrawObjects.offscreenIndices.add(offscreenIndex);
+                }
+            } else if (objects.get(i).objectType == CubismModelObjectInfo.ObjectType.DRAWABLE) {
+                // Drawableの場合、パーツの子Drawableに追加
+                childDrawObjects.drawableIndices.add(objects.get(i).objectIndex);
+            }
+        }
+    }
+
+    /**
+     * Returns the parent-child hierarchy of the parts.
+     *
+     * @return collection of parts hierarchy
+     */
+    public List<CubismModelPartInfo> getPartsHierarchy() {
+        return partsHierarchy;
+    }
+
+    //========================================================
+    //  Parameter Functions.
+    //========================================================
 
     /**
      * Get the index of parameters.
@@ -787,6 +1122,10 @@ public class CubismModel {
         );
     }
 
+    //========================================================
+    //  Drawable Functions.
+    //========================================================
+
     /**
      * Get the index of Drawable.
      *
@@ -820,22 +1159,6 @@ public class CubismModel {
     public CubismId getDrawableId(int drawableIndex) {
         assert (0 <= drawableIndex && drawableIndex < drawableIds.size());
         return drawableIds.get(drawableIndex);
-    }
-
-    /**
-     * Get the drawing order list of Drawable.
-     *
-     * @return the drawing order list of Drawable
-     */
-    public int[] getDrawableRenderOrders() {
-        final CubismDrawableView[] drawableViews = model.getDrawableViews();
-        assert drawableViews != null;
-
-        if (drawableViews.length > 0) {
-            return drawableViews[0].getDrawables().getRenderOrders();
-        } else {
-            return new int[0];
-        }
     }
 
     /**
@@ -956,11 +1279,30 @@ public class CubismModel {
      */
     public CubismBlendMode getDrawableBlendMode(int drawableIndex) {
         final byte constantFlag = model.getDrawableViews()[drawableIndex].getConstantFlag();
-        return isBitSet(constantFlag, BLEND_ADDITIVE)
+        return isBitSet(constantFlag, CubismDrawableFlag.ConstantFlag.BLEND_ADDITIVE)
                ? CubismBlendMode.ADDITIVE
-               : isBitSet(constantFlag, BLEND_MULTIPLICATIVE)
+            : isBitSet(constantFlag, CubismDrawableFlag.ConstantFlag.BLEND_MULTIPLICATIVE)
                  ? CubismBlendMode.MULTIPLICATIVE
                  : CubismBlendMode.NORMAL;
+    }
+
+    /**
+     * Returns the blend mode of the drawable.
+     *
+     * @param drawableIndex drawable index
+     * @return blend mode of the drawable
+     */
+    public csmBlendMode getDrawableBlendModeType(int drawableIndex) {
+        // NOTE:
+        //  事前に作成したListから該当するインスタンスを取得して値を更新して返す。
+        //  これにより毎フレームのnewを回避しつつ、Drawable間でのインスタンス共有による事故を防ぐ。
+        final csmBlendMode blendMode = drawableBlendModeTypes.get(drawableIndex);
+
+        blendMode.setBlendMode(
+            model.getDrawableViews()[drawableIndex].getBlendMode()
+        );
+
+        return blendMode;
     }
 
     /**
@@ -973,7 +1315,7 @@ public class CubismModel {
     public boolean getDrawableInvertedMask(int drawableIndex) {
         final byte constantFlag = model.getDrawableViews()[drawableIndex].getConstantFlag();
 
-        return isBitSet(constantFlag, IS_INVERTED_MASK);
+        return isBitSet(constantFlag, CubismDrawableFlag.ConstantFlag.IS_INVERTED_MASK);
     }
 
     /**
@@ -984,7 +1326,7 @@ public class CubismModel {
      */
     public boolean getDrawableDynamicFlagIsVisible(int drawableIndex) {
         final byte dynamicFlag = model.getDrawableViews()[drawableIndex].getDynamicFlag();
-        return isBitSet(dynamicFlag, IS_VISIBLE);
+        return isBitSet(dynamicFlag, CubismDrawableFlag.DynamicFlag.IS_VISIBLE);
     }
 
     /**
@@ -995,7 +1337,7 @@ public class CubismModel {
      */
     public boolean getDrawableDynamicFlagVisibilityDidChange(int drawableIndex) {
         final byte dynamicFlag = model.getDrawableViews()[drawableIndex].getDynamicFlag();
-        return isBitSet(dynamicFlag, VISIBILITY_DID_CHANGE);
+        return isBitSet(dynamicFlag, CubismDrawableFlag.DynamicFlag.VISIBILITY_DID_CHANGE);
     }
 
     /**
@@ -1006,7 +1348,7 @@ public class CubismModel {
      */
     public boolean getDrawableDynamicFlagOpacityDidChange(int drawableIndex) {
         final byte dynamicFlag = model.getDrawableViews()[drawableIndex].getDynamicFlag();
-        return isBitSet(dynamicFlag, OPACITY_DID_CHANGE);
+        return isBitSet(dynamicFlag, CubismDrawableFlag.DynamicFlag.OPACITY_DID_CHANGE);
     }
 
     /**
@@ -1018,7 +1360,7 @@ public class CubismModel {
      */
     public boolean getDrawableDynamicFlagDrawOrderDidChange(int drawableIndex) {
         final byte dynamicFlag = model.getDrawableViews()[drawableIndex].getDynamicFlag();
-        return isBitSet(dynamicFlag, DRAW_ORDER_DID_CHANGE);
+        return isBitSet(dynamicFlag, CubismDrawableFlag.DynamicFlag.DRAW_ORDER_DID_CHANGE);
     }
 
     /**
@@ -1029,7 +1371,7 @@ public class CubismModel {
      */
     public boolean getDrawableDynamicFlagRenderOrderDidChange(int drawableIndex) {
         final byte dynamicFlag = model.getDrawableViews()[drawableIndex].getDynamicFlag();
-        return isBitSet(dynamicFlag, RENDER_ORDER_DID_CHANGE);
+        return isBitSet(dynamicFlag, CubismDrawableFlag.DynamicFlag.RENDER_ORDER_DID_CHANGE);
     }
 
     /**
@@ -1040,7 +1382,7 @@ public class CubismModel {
      */
     public boolean getDrawableDynamicFlagVertexPositionsDidChange(int drawableIndex) {
         final byte dynamicFlag = model.getDrawableViews()[drawableIndex].getDynamicFlag();
-        return isBitSet(dynamicFlag, VERTEX_POSITIONS_DID_CHANGE);
+        return isBitSet(dynamicFlag, CubismDrawableFlag.DynamicFlag.VERTEX_POSITIONS_DID_CHANGE);
     }
 
     /**
@@ -1051,7 +1393,7 @@ public class CubismModel {
      */
     public boolean getDrawableDynamicFlagBlendColorDidChange(int drawableIndex) {
         final byte dynamicFlag = model.getDrawableViews()[drawableIndex].getDynamicFlag();
-        return isBitSet(dynamicFlag, BLEND_COLOR_DID_CHANGE);
+        return isBitSet(dynamicFlag, CubismDrawableFlag.DynamicFlag.BLEND_COLOR_DID_CHANGE);
     }
 
     /**
@@ -1086,11 +1428,138 @@ public class CubismModel {
         }
     }
 
+    //========================================================
+    //  Offscreen Functions.
+    //========================================================
 
     /**
-     * Whether clipping mask is used.
+     * Returns the blend mode of the offscreen.
      *
-     * @return If clipping mask is used, return true.
+     * @param offscreenIndex offscreen index
+     * @return blend mode of the offscreen
+     */
+    public csmBlendMode getOffscreenBlendModeType(int offscreenIndex) {
+        // NOTE:
+        //  事前に作成したListから該当するインスタンスを取得して値を更新して返す。
+        //  これにより毎フレームのnewを回避しつつ、Offscreen間でのインスタンス共有による事故を防ぐ。
+        csmBlendMode blendMode = offscreenBlendModeTypes.get(offscreenIndex);
+
+        final int[] blendModes = model.getOffscreenRendering().getBlendModes();
+        if (blendModes != null) {
+            blendMode.setBlendMode(blendModes[offscreenIndex]);
+        }
+
+        return blendMode;
+    }
+
+    /**
+     * Returns the number of offscreens.
+     *
+     * @return number of offscreens
+     */
+    public int getOffscreenCount() {
+        final int offscreenCount = model.getOffscreenRendering().getCount();
+        return offscreenCount;
+    }
+
+    /**
+     * Returns the array of clipping masks of the offscreens.
+     *
+     * @return array of clipping masks of the offscreens
+     */
+    public int[][] getOffscreenMasks() {
+        final int[][] masks = model.getOffscreenRendering().getMasks();
+        return masks;
+    }
+
+    /**
+     * Returns the array of the number of clipping masks of the offscreens.
+     *
+     * @return array of the number of clipping masks of the offscreens
+     */
+    public int[] getOffscreenMaskCounts() {
+        final int[] maskCounts = model.getOffscreenRendering().getMaskCounts();
+        return maskCounts;
+    }
+
+    /**
+     * Returns the array of owner indices for the offscreen.
+     *
+     * @return array of owner indices for the offscreen
+     */
+    public int[] getOffscreenOwnerIndices() {
+        final int[] ownerIndices = model.getOffscreenRendering().getOwnerIndices();
+        return ownerIndices;
+    }
+
+    /**
+     * Returns the ID of the offscreen owner.
+     *
+     * @param offscreenIndex index of the offscreen
+     * @return owner ID
+     */
+    public CubismId getOffscreenOwnerId(int offscreenIndex) {
+        final int ownerIndex = model.getOffscreenRendering().getOwnerIndices()[offscreenIndex];
+        return CubismFramework.getIdManager().getId(model.getParts().getIds()[ownerIndex]);
+    }
+
+    /**
+     * Returns the multiply color of the offscreen.
+     *
+     * @param offscreenIndex offscreen index
+     * @return multiply color of the offscreen
+     */
+    public float[] getOffscreenMultiplyColor(int offscreenIndex) {
+        final float[][] offscreenColors = model.getOffscreenRendering().getMultiplyColors();
+        return offscreenColors[offscreenIndex];
+    }
+
+    /**
+     * Returns the screen color of the offscreen.
+     *
+     * @param offscreenIndex offscreen index
+     * @return screen color of the offscreen
+     */
+    public float[] getOffscreenScreenColor(int offscreenIndex) {
+        final float[][] offscreenColors = model.getOffscreenRendering().getScreenColors();
+        return offscreenColors[offscreenIndex];
+    }
+
+    /**
+     * Returns the inverted mask setting for the offscreen.
+     * <p>
+     * Ignored if the mask is not used.
+     *
+     * @param offscreenIndex Offscreen index
+     * @return Inverted mask setting of the offscreen. true if inverted.
+     */
+    public boolean getOffscreenInvertedMask(int offscreenIndex) {
+        final byte[] constantFlags = model.getOffscreenRendering().getConstantFlags();
+        return isBitSet(constantFlags[offscreenIndex], CubismDrawableFlag.ConstantFlag.IS_INVERTED_MASK);
+    }
+
+    /**
+     * Returns the opacity of the Offscreen.
+     *
+     * @param offscreenIndex offscreen index
+     * @return offscreen opacity
+     */
+    public float getOffscreenOpacity(int offscreenIndex) {
+        if (offscreenIndex < 0 || offscreenIndex >= model.getOffscreenRendering().getCount()) {
+            return 1.0f;    // オフスクリーンが無いのでスキップ
+        }
+
+        return model.getOffscreenRendering().getOpacities()[offscreenIndex];
+    }
+
+    //========================================================
+    //  Other Functions.
+    //========================================================
+
+    /**
+     * Checks whether the model uses clipping masks.
+     *
+     * @return true if the model uses clipping masks.
      */
     public boolean isUsingMasking() {
         final CubismDrawableView[] drawableViews = model.getDrawableViews();
@@ -1106,6 +1575,25 @@ public class CubismModel {
                 }
                 return true;
             }
+        }
+
+        return false;
+    }
+
+    /**
+     * Checks whether the offscreen uses clipping masks.
+     *
+     * @return true if the offscreen uses clipping masks.
+     */
+    public boolean isUsingMaskingForOffscreen() {
+        int offscreenCount = model.getOffscreenRendering().getCount();
+        int[] offscreenMaskCounts = model.getOffscreenRendering().getMaskCounts();
+
+        for (int i = 0; i < offscreenCount; i++) {
+            if (offscreenMaskCounts[i] <= 0) {
+                continue;
+            }
+            return true;
         }
 
         return false;
@@ -1140,6 +1628,10 @@ public class CubismModel {
             savedParameters[i] = parameterValues[i].getValue();
         }
     }
+
+    //========================================================
+    //  Color Functions.
+    //========================================================
 
     /**
      * Get the multiply color from the list.
@@ -1306,6 +1798,155 @@ public class CubismModel {
     public void setPartScreenColor(int partIndex, float r, float g, float b, float a) {
         setPartColor(partIndex, r, g, b, a, userPartScreenColors, userDrawableScreenColors);
     }
+
+    /**
+     * Returns the multiply color from the list of offscreen.
+     * <p>
+     * NOTE: This method returns a cached instance for optimization purposes.
+     *
+     * @param offscreenIndex offscreen index
+     * @return multiply color (CubismTextureColor)
+     */
+    public CubismRenderer.CubismTextureColor getMultiplyColorOffscreen(int offscreenIndex) {
+        if (getOverrideFlagForModelMultiplyColors() || getOverrideFlagForOffscreenMultiplyColors(offscreenIndex)) {
+            return userOffscreenMultiplyColors.get(offscreenIndex).color;
+        }
+
+        final float[] tmpColor = getOffscreenMultiplyColor(offscreenIndex);
+
+        // インスタンス生成を避けるため、キャッシュリストからインスタンスを取得して値を更新
+        CubismRenderer.CubismTextureColor color = offscreenMultiplyColors.get(offscreenIndex);
+        color.r = tmpColor[0];
+        color.g = tmpColor[1];
+        color.b = tmpColor[2];
+        color.a = tmpColor[3];
+
+        return color;
+    }
+
+    /**
+     * Returns the screen color from the list of offscreen.
+     * <p>
+     * NOTE: This method returns a cached instance for optimization purposes.
+     *
+     * @param offscreenIndex offscreen index
+     * @return screen color (CubismTextureColor)
+     */
+    public CubismRenderer.CubismTextureColor getScreenColorOffscreen(int offscreenIndex) {
+        if (getOverrideFlagForModelScreenColors() || getOverrideFlagForOffscreenScreenColors(offscreenIndex)) {
+            return userOffscreenScreenColors.get(offscreenIndex).color;
+        }
+
+        final float[] tmpColor = getOffscreenScreenColor(offscreenIndex);
+
+        // インスタンス生成を避けるため、キャッシュリストからインスタンスを取得して値を更新
+        CubismRenderer.CubismTextureColor color = offscreenScreenColors.get(offscreenIndex);
+        color.r = tmpColor[0];
+        color.g = tmpColor[1];
+        color.b = tmpColor[2];
+        color.a = tmpColor[3];
+
+        return color;
+    }
+
+    /**
+     * Sets the multiply color of the offscreen.
+     *
+     * @param offscreenIndex offscreen index
+     * @param color          multiply color to be set (CubismTextureColor)
+     */
+    public void setMultiplyColorOffscreen(int offscreenIndex, final CubismRenderer.CubismTextureColor color) {
+        setMultiplyColorOffscreen(offscreenIndex, color.r, color.g, color.b, color.a);
+    }
+
+    /**
+     * Sets the multiply color of the offscreen.
+     *
+     * @param offscreenIndex offscreen index
+     * @param r              red value of the multiply color to be set
+     * @param g              green value of the multiply color to be set
+     * @param b              blue value of the multiply color to be set
+     * @param a              alpha value of the multiply color to be set
+     */
+    public void setMultiplyColorOffscreen(
+        int offscreenIndex,
+        float r,
+        float g,
+        float b,
+        float a
+    ) {
+        userOffscreenMultiplyColors.get(offscreenIndex).color.r = r;
+        userOffscreenMultiplyColors.get(offscreenIndex).color.g = g;
+        userOffscreenMultiplyColors.get(offscreenIndex).color.b = b;
+        userOffscreenMultiplyColors.get(offscreenIndex).color.a = a;
+    }
+
+    /**
+     * Sets the multiply color of the offscreen.
+     *
+     * @param offscreenIndex offscreen index
+     * @param r              red value of the multiply color to be set
+     * @param g              green value of the multiply color to be set
+     * @param b              blue value of the multiply color to be set
+     */
+    public void setMultiplyColorOffscreen(
+        int offscreenIndex,
+        float r,
+        float g,
+        float b
+    ) {
+        setMultiplyColorOffscreen(offscreenIndex, r, g, b, 1.0f);
+    }
+
+    /**
+     * Sets the screen color of the offscreen.
+     *
+     * @param offscreenIndex offscreen index
+     * @param color          screen color to be set (CubismTextureColor)
+     */
+    public void setScreenColorOffscreen(int offscreenIndex, final CubismRenderer.CubismTextureColor color) {
+        setScreenColorOffscreen(offscreenIndex, color.r, color.g, color.b, color.a);
+    }
+
+    /**
+     * Sets the screen color of the offscreen.
+     *
+     * @param offscreenIndex offscreen index
+     * @param r              red value of the screen color to be set
+     * @param g              green value of the screen color to be set
+     * @param b              blue value of the screen color to be set
+     * @param a              alpha value of the screen color to be set
+     */
+    public void setScreenColorOffscreen(
+        int offscreenIndex,
+        float r,
+        float g,
+        float b,
+        float a
+    ) {
+        userOffscreenScreenColors.get(offscreenIndex).color.r = r;
+        userOffscreenScreenColors.get(offscreenIndex).color.g = g;
+        userOffscreenScreenColors.get(offscreenIndex).color.b = b;
+        userOffscreenScreenColors.get(offscreenIndex).color.a = a;
+    }
+
+    /**
+     * Sets the screen color of the offscreen.
+     *
+     * @param offscreenIndex offscreen index
+     * @param r              red value of the screen color to be set
+     * @param g              green value of the screen color to be set
+     * @param b              blue value of the screen color to be set
+     */
+    public void setScreenColorOffscreen(
+        int offscreenIndex,
+        float r,
+        float g,
+        float b
+    ) {
+        setScreenColorOffscreen(offscreenIndex, r, g, b, 1.0f);
+    }
+
 
     /**
      * Whether to override the entire model multiply color from the SDK.
@@ -1570,6 +2211,48 @@ public class CubismModel {
     }
 
     /**
+     * Checks whether the offscreen multiply color is overridden by the SDK.
+     *
+     * @param offscreenIndex offscreen index
+     * @return true if the color information from the SDK is used; otherwise false.
+     */
+    public boolean getOverrideFlagForOffscreenMultiplyColors(int offscreenIndex) {
+        return userOffscreenMultiplyColors.get(offscreenIndex).isOverridden;
+    }
+
+    /**
+     * Checks whether the offscreen screen color is overridden by the SDK.
+     *
+     * @param offscreenIndex offscreen index
+     * @return true if the color information from the SDK is used; otherwise false.
+     */
+    public boolean getOverrideFlagForOffscreenScreenColors(int offscreenIndex) {
+        return userOffscreenScreenColors.get(offscreenIndex).isOverridden;
+    }
+
+    /**
+     * Sets whether the offscreen multiply color is overridden by the SDK.
+     * Use true to use the color information from the SDK, or false to use the color information from the model.
+     *
+     * @param offscreenIndex offscreen index
+     * @param value          offscreen True enable override, false to disable
+     */
+    public void setOverrideFlagForOffscreenMultiplyColors(int offscreenIndex, boolean value) {
+        userOffscreenMultiplyColors.get(offscreenIndex).isOverridden = value;
+    }
+
+    /**
+     * Sets whether the offscreen screen color is overridden by the SDK.
+     * Use true to use the color information from the SDK, or false to use the color information from the model.
+     *
+     * @param offscreenIndex offscreen index
+     * @param value          offscreen True enable override, false to disable
+     */
+    public void setOverrideFlagForOffscreenScreenColors(int offscreenIndex, boolean value) {
+        userOffscreenScreenColors.get(offscreenIndex).isOverridden = value;
+    }
+
+    /**
      * Get the culling inforamtion of Drawable.
      *
      * @param drawableIndex Drawable index
@@ -1577,11 +2260,11 @@ public class CubismModel {
      */
     public boolean getDrawableCulling(int drawableIndex) {
         if (getOverrideFlagForModelCullings() || getOverrideFlagForDrawableCullings(drawableIndex)) {
-            return userCullings.get(drawableIndex).isCulling;
+            return userDrawableCullings.get(drawableIndex).isCulling;
         }
 
         final byte constantFlag = model.getDrawableViews()[drawableIndex].getConstantFlag();
-        return !isBitSet(constantFlag, IS_DOUBLE_SIDED);
+        return !isBitSet(constantFlag, CubismDrawableFlag.ConstantFlag.IS_DOUBLE_SIDED);
     }
 
     /**
@@ -1591,7 +2274,34 @@ public class CubismModel {
      * @param isCulling カリングするかどうか
      */
     public void setDrawableCulling(int drawableIndex, boolean isCulling) {
-        userCullings.get(drawableIndex).isCulling = isCulling;
+        userDrawableCullings.get(drawableIndex).isCulling = isCulling;
+    }
+
+    /**
+     * Returns the culling information of the offscreen.
+     *
+     * @param offscreenIndex offscreen index
+     * @return culling information of the offscreen
+     */
+    public boolean getOffscreenCulling(int offscreenIndex) {
+        if (getOverrideFlagForModelCullings() || getOverrideFlagForOffscreenCullings(offscreenIndex)) {
+            return userOffscreenCullings.get(offscreenIndex).isCulling;
+        }
+
+        final byte[] constantFlags = model.getOffscreenRendering().getConstantFlags();
+
+        // NOTE: Offscreenだが、CoreJavaの定義にDrawableFlagしかないためこれを使用している。
+        return !isBitSet(constantFlags[offscreenIndex], CubismDrawableFlag.ConstantFlag.IS_DOUBLE_SIDED);
+    }
+
+    /**
+     * Sets the culling information of the offscreen.
+     *
+     * @param offscreenIndex offscreen index
+     * @param isCulling      true enable culling, false to disable
+     */
+    public void setOffscreenCulling(int offscreenIndex, boolean isCulling) {
+        userOffscreenCullings.get(offscreenIndex).isCulling = isCulling;
     }
 
     /**
@@ -1704,7 +2414,7 @@ public class CubismModel {
      * @return trueならSDK上のカリング設定を使用し、falseならモデルのカリング設定を使用する
      */
     public boolean getOverrideFlagForDrawableCullings(int drawableIndex) {
-        return userCullings.get(drawableIndex).isOverridden;
+        return userDrawableCullings.get(drawableIndex).isOverridden;
     }
 
     /**
@@ -1727,7 +2437,37 @@ public class CubismModel {
      * @param value SDK上のカリング設定を使うならtrue, モデルのカリング設定を使うならfalse
      */
     public void setOverrideFlagForDrawableCullings(int drawableIndex, boolean value) {
-        userCullings.get(drawableIndex).isOverridden = value;
+        userDrawableCullings.get(drawableIndex).isOverridden = value;
+    }
+
+    /**
+     * Checks whether the culling settings for the offscreen are overridden by the SDK.
+     *
+     * @param offscreenIndex offscreen index
+     * @return true if the culling settings from the SDK are used; otherwise false.
+     */
+    public boolean getOverrideFlagForOffscreenCullings(int offscreenIndex) {
+        return userOffscreenCullings.get(offscreenIndex).isOverridden;
+    }
+
+    /**
+     * Sets whether the culling settings for the offscreen are overridden by the SDK.
+     * Use true to use the culling settings from the SDK, or false to use the culling settings from the model.
+     *
+     * @param offscreenIndex offscreen index
+     * @param value          true to use the override, false to keep the model's own culling settings
+     */
+    public void setOverrideFlagForOffscreenCullings(int offscreenIndex, boolean value) {
+        userOffscreenCullings.get(offscreenIndex).isOverridden = value;
+    }
+
+    /**
+     * Determines whether the drawable should be rendered with a blend mode.
+     *
+     * @return true if a blend mode is applied; otherwise, false.
+     */
+    public boolean isBlendModeEnabled() {
+        return isBlendModeEnabled;
     }
 
     /**
@@ -1795,14 +2535,14 @@ public class CubismModel {
         CubismDrawableView[] drawableValues = model.getDrawableViews();
 
         // MultiplyColors
-        CubismRenderer.CubismTextureColor mutiplyColor = new CubismRenderer.CubismTextureColor(
+        CubismRenderer.CubismTextureColor multiplyColor = new CubismRenderer.CubismTextureColor(
             1.0f,
             1.0f,
             1.0f,
             1.f
         );
-        DrawableColorData userDrawableMultiplyColor = new DrawableColorData(false, mutiplyColor);
-        PartColorData userPartMultiplyColor = new PartColorData(false, mutiplyColor);
+        ColorData userDrawableMultiplyColor = new ColorData(false, multiplyColor);
+        ColorData userPartMultiplyColor = new ColorData(false, multiplyColor);
 
         // ScreenColors
         CubismRenderer.CubismTextureColor screenColor = new CubismRenderer.CubismTextureColor(
@@ -1811,8 +2551,8 @@ public class CubismModel {
             0.0f,
             1.0f
         );
-        DrawableColorData userDrawableScreenColor = new DrawableColorData(false, screenColor);
-        PartColorData userPartScreenColor = new PartColorData(false, screenColor);
+        ColorData userDrawableScreenColor = new ColorData(false, screenColor);
+        ColorData userPartScreenColor = new ColorData(false, screenColor);
 
         // To prevent performance degradation due to capacity expansion, HashMap is generated with initial capacity reserved.
         int partCount = model.getPartViews().length;
@@ -1823,9 +2563,11 @@ public class CubismModel {
             String id = drawableValue.getId();
             drawableIds.add(CubismFramework.getIdManager().getId(id));
 
-            userDrawableMultiplyColors.add(new DrawableColorData(userDrawableMultiplyColor));
-            userDrawableScreenColors.add(new DrawableColorData(userDrawableScreenColor));
-            userCullings.add(new DrawableCullingData(false, false));
+            userDrawableMultiplyColors.add(new ColorData(userDrawableMultiplyColor));
+            userDrawableScreenColors.add(new ColorData(userDrawableScreenColor));
+            userDrawableCullings.add(new CullingData(false, false));
+
+            drawableBlendModeTypes.add(new csmBlendMode());
 
             // Bind parent Parts and child Drawables.
             int parentIndex = drawableValue.getParentPartIndex();
@@ -1841,8 +2583,18 @@ public class CubismModel {
 
         // Setting for Parts.
         for (int i = 0; i < partCount; i++) {
-            userPartMultiplyColors.add(new PartColorData(userPartMultiplyColor));
-            userPartScreenColors.add(new PartColorData(userPartScreenColor));
+            userPartMultiplyColors.add(new ColorData(userPartMultiplyColor));
+            userPartScreenColors.add(new ColorData(userPartScreenColor));
+        }
+
+        // blendMode
+        initializeBlendMode();
+
+        // Offscreen
+        initializeOffscreen();
+
+        if (isBlendModeEnabled) {
+            setupPartsHierarchy();
         }
     }
 
@@ -1853,6 +2605,137 @@ public class CubismModel {
      */
     CubismModel(final com.live2d.sdk.cubism.core.CubismModel model) {
         this.model = model;
+    }
+
+    /**
+     * Initializes blend mode settings based on offscreens and drawable blend modes.
+     */
+    void initializeBlendMode() {
+        final int drawableCount = getDrawableCount();
+
+        // オフスクリーンが存在するか、DrawableのブレンドモードでColorBlend、AlphaBlendを使用するのであればブレンドモードを有効にする。
+        if (model.getOffscreenRenderingViews().length > 0) {
+            isBlendModeEnabled = true;
+        } else {
+            csmBlendMode blendMode = new csmBlendMode();
+            final int[] blendModes = model.getDrawables().getBlendModes();
+
+            for (int i = 0; i < drawableCount; i++) {
+                blendMode.setBlendMode(blendModes[i]);
+                final CubismColorBlendType colorBlendType = blendMode.getColorBlendType();
+                final CubismAlphaBlendType alphaBlendType = blendMode.getAlphaBlendType();
+
+                // NormalOver、AddCompatible、MultiplyCompatible以外であればブレンドモードを有効にする。
+                if (!(colorBlendType == CubismColorBlendType.NORMAL && alphaBlendType == CubismAlphaBlendType.OVER) &&
+                    colorBlendType != CubismColorBlendType.ADD_COMPATIBLE &&
+                    colorBlendType != CubismColorBlendType.MULTIPLY_COMPATIBLE) {
+                    isBlendModeEnabled = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    /**
+     * Initializes offscreen rendering settings.
+     */
+    private void initializeOffscreen() {
+        // 乗算色
+        ColorData userMultiplyColor = new ColorData(
+            false,
+            new CubismRenderer.CubismTextureColor(
+                1.0f,
+                1.0f,
+                1.0f,
+                1.0f
+            )
+        );
+
+        // スクリーン色
+        ColorData userScreenColor = new ColorData(
+            false,
+            new CubismRenderer.CubismTextureColor(
+                0.0f,
+                0.0f,
+                0.0f,
+                1.0f
+            )
+        );
+
+        final int offscreenCount = model.getOffscreenRendering().getCount();
+
+        for (int i = 0; i < offscreenCount; i++) {
+            userOffscreenMultiplyColors.add(new ColorData(userMultiplyColor));
+            userOffscreenScreenColors.add(new ColorData(userScreenColor));
+            userOffscreenCullings.add(new CullingData());
+
+            offscreenBlendModeTypes.add(new csmBlendMode());
+
+            // キャッシュ用インスタンスをセットアップ
+            offscreenMultiplyColors.add(new CubismRenderer.CubismTextureColor());
+            offscreenScreenColors.add(new CubismRenderer.CubismTextureColor());
+        }
+    }
+
+    /**
+     * Sets up the parts hierarchy by building parent-child relationships between parts and drawables.
+     */
+    private void setupPartsHierarchy() {
+        partsHierarchy.clear();
+
+        // すべてのパーツのパーツ情報管理構造体を作成
+        final int partCount = model.getParts().getCount();
+        for (int i = 0; i < partCount; i++) {
+            partsHierarchy.add(new CubismModelPartInfo());
+        }
+
+        // Partごとに親パーツを取得し、親パーツの子objectリストに追加する。
+        for (int i = 0; i < partCount; i++) {
+            final int parentPartIndex = getPartParentPartIndex(i);
+
+            if (parentPartIndex == CubismNoIndex.PARENT.index) {
+                continue;
+            }
+
+            for (int partIndex = 0; partIndex < partsHierarchy.size(); partIndex++) {
+                if (partIndex == parentPartIndex) {
+                    CubismModelObjectInfo objectInfo = new CubismModelObjectInfo(
+                        i,
+                        CubismModelObjectInfo.ObjectType.PARTS
+                    );
+                    partsHierarchy.get(partIndex).objects.add(objectInfo);
+                    break;
+                }
+            }
+        }
+
+        // Drawableごとに親パーツを取得し、親パーツの子objectリストに追加する。
+        for (int i = 0; i < model.getDrawables().getCount(); i++) {
+            final int parentPartIndex = getDrawableParentPartIndex(i);
+
+            if (parentPartIndex == CubismNoIndex.PARENT.index) {
+                continue;
+            }
+
+            for (int partIndex = 0; partIndex < partsHierarchy.size(); partIndex++) {
+                if (partIndex == parentPartIndex) {
+                    CubismModelObjectInfo objectInfo = new CubismModelObjectInfo(
+                        i,
+                        CubismModelObjectInfo.ObjectType.DRAWABLE
+                    );
+                    partsHierarchy.get(partIndex).objects.add(objectInfo);
+                    break;
+                }
+            }
+        }
+
+        // ここまででモデルのパーツ構造が完成。
+
+        // パーツ子描画オブジェクト情報構造体を作成
+        for (int i = 0; i < partsHierarchy.size(); i++) {
+            // パーツ管理構造体を取得
+            getPartChildDrawObjects(i);
+        }
     }
 
     /**
@@ -1878,8 +2761,8 @@ public class CubismModel {
     private void setPartColor(
         int partIndex,
         float r, float g, float b, float a,
-        List<PartColorData> partColors,
-        List<DrawableColorData> drawableColors
+        List<ColorData> partColors,
+        List<ColorData> drawableColors
     ) {
         partColors.get(partIndex).color.r = r;
         partColors.get(partIndex).color.g = g;
@@ -1912,8 +2795,8 @@ public class CubismModel {
     private void setOverrideColorsForPartColors(
         int partIndex,
         boolean value,
-        List<PartColorData> partColors,
-        List<DrawableColorData> drawableColors
+        List<ColorData> partColors,
+        List<ColorData> drawableColors
     ) {
         partColors.get(partIndex).isOverridden = value;
 
@@ -1976,29 +2859,45 @@ public class CubismModel {
     /**
      * Drawableの乗算色のリスト
      */
-    private final List<DrawableColorData> userDrawableMultiplyColors = new ArrayList<DrawableColorData>();
+    private final List<ColorData> userDrawableMultiplyColors = new ArrayList<>();
     /**
      * Drawableのスクリーン色のリスト
      */
-    private final List<DrawableColorData> userDrawableScreenColors = new ArrayList<DrawableColorData>();
+    private final List<ColorData> userDrawableScreenColors = new ArrayList<>();
 
     /**
      * パーツの乗算色のリスト
      */
-    private final List<PartColorData> userPartMultiplyColors = new ArrayList<PartColorData>();
+    private final List<ColorData> userPartMultiplyColors = new ArrayList<>();
     /**
      * パーツのスクリーン色のリスト
      */
-    private final List<PartColorData> userPartScreenColors = new ArrayList<PartColorData>();
+    private final List<ColorData> userPartScreenColors = new ArrayList<>();
+
+    /**
+     * List of offscreen multiply colors.
+     */
+    private final List<ColorData> userOffscreenMultiplyColors = new ArrayList<>();
+
+    /**
+     * List of offscreen screen colors.
+     */
+    private final List<ColorData> userOffscreenScreenColors = new ArrayList<>();
+
     /**
      * Partとその子DrawableのListとのMap
      */
     private Map<Integer,List<Integer>> partChildDrawablesMap;
 
     /**
-     * カリング設定のリスト
+     * List of culling information for drawables.
      */
-    private final List<DrawableCullingData> userCullings = new ArrayList<DrawableCullingData>();
+    private final List<CullingData> userDrawableCullings = new ArrayList<>();
+
+    /**
+     * List of culling information for offscreens.
+     */
+    private final List<CullingData> userOffscreenCullings = new ArrayList<>();
 
     /**
      * List to manage ParameterRepeat and Override flag to be set for each Parameter
@@ -2022,4 +2921,39 @@ public class CubismModel {
      * モデルのカリング設定をすべて上書きするか？
      */
     private boolean isOverriddenCullings;
+
+    /**
+     * Flag whether blend mode is enabled for this model.
+     */
+    private boolean isBlendModeEnabled;
+
+    private final List<CubismModelPartInfo> partsHierarchy = new ArrayList<>();
+
+    /**
+     * List of blend modes for each drawable.
+     * <p>
+     * Used to prevent generating instances each time the value is returned in {@link #getDrawableBlendModeType(int)}.
+     */
+    private final List<csmBlendMode> drawableBlendModeTypes = new ArrayList<>();
+
+    /**
+     * List of blend modes for each offscreen.
+     * <p>
+     * Used to prevent generating instances each time the value is returned in {@link #getOffscreenBlendModeType(int)}.
+     */
+    private final List<csmBlendMode> offscreenBlendModeTypes = new ArrayList<>();
+
+    /**
+     * List of multiply color instances for each offscreen.
+     * <p>
+     * Used to prevent generating instances each time the value is returned in {@link #getMultiplyColorOffscreen(int)}.
+     */
+    private final List<CubismRenderer.CubismTextureColor> offscreenMultiplyColors = new ArrayList<>();
+
+    /**
+     * List of screen color instances for each offscreen.
+     * <p>
+     * Used to prevent generating instances each time the value is returned in {@link #getScreenColorOffscreen(int)}.
+     */
+    private final List<CubismRenderer.CubismTextureColor> offscreenScreenColors = new ArrayList<>();
 }

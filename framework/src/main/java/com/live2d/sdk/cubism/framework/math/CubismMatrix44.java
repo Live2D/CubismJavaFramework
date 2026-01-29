@@ -290,6 +290,81 @@ public class CubismMatrix44 {
         multiply(tr, multiplier.tr, tr);
     }
 
+    /**
+     * Calculates the inverse matrix of the current matrix.
+     * <p>
+     * NOTE: Creates a new {@code CubismMatrix44} instance on each call.
+     *
+     * @return inverse matrix of the current matrix; identity matrix when epsilon is small.
+     */
+    public CubismMatrix44 getInvert() {
+        CubismMatrix44 dst = new CubismMatrix44();
+        getInvert(dst);
+        return dst;
+    }
+
+    /**
+     * Calculates the inverse matrix of the current matrix and stores the result in the destination matrix.
+     * <p>
+     * This method does not allocate a new instance.
+     *
+     * @param dst destination matrix to store the inverse matrix result
+     */
+    public void getInvert(CubismMatrix44 dst) {
+        float r00 = tr[0];
+        float r10 = tr[1];
+        float r20 = tr[2];
+        float r01 = tr[4];
+        float r11 = tr[5];
+        float r21 = tr[6];
+        float r02 = tr[8];
+        float r12 = tr[9];
+        float r22 = tr[10];
+
+        float tx = tr[12];
+        float ty = tr[13];
+        float tz = tr[14];
+
+        float det = r00 * (r11 * r22 - r12 * r21) -
+                    r01 * (r10 * r22 - r12 * r20) +
+                    r02 * (r10 * r21 - r11 * r20);
+
+        if (CubismMath.absF(det) < CubismMath.EPSILON) {
+            dst.loadIdentity();
+            return;
+        }
+
+        float invDet = 1.0f / det;
+
+        float inv00 = (r11 * r22 - r12 * r21) * invDet;
+        float inv01 = -(r01 * r22 - r02 * r21) * invDet;
+        float inv02 = (r01 * r12 - r02 * r11) * invDet;
+        float inv10 = -(r10 * r22 - r12 * r20) * invDet;
+        float inv11 = (r00 * r22 - r02 * r20) * invDet;
+        float inv12 = -(r00 * r12 - r02 * r10) * invDet;
+        float inv20 = (r10 * r21 - r11 * r20) * invDet;
+        float inv21 = -(r00 * r21 - r01 * r20) * invDet;
+        float inv22 = (r00 * r11 - r01 * r10) * invDet;
+
+        dst.tr[0] = inv00;
+        dst.tr[1] = inv10;
+        dst.tr[2] = inv20;
+        dst.tr[3] = 0.0f;
+        dst.tr[4] = inv01;
+        dst.tr[5] = inv11;
+        dst.tr[6] = inv21;
+        dst.tr[7] = 0.0f;
+        dst.tr[8] = inv02;
+        dst.tr[9] = inv12;
+        dst.tr[10] = inv22;
+        dst.tr[11] = 0.0f;
+
+        dst.tr[12] = -(inv00 * tx + inv01 * ty + inv02 * tz);
+        dst.tr[13] = -(inv10 * tx + inv11 * ty + inv12 * tz);
+        dst.tr[14] = -(inv20 * tx + inv21 * ty + inv22 * tz);
+        dst.tr[15] = 1.0f;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

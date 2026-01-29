@@ -7,18 +7,26 @@
 
 package com.live2d.sdk.cubism.framework.rendering.android;
 
+import com.live2d.sdk.cubism.framework.CubismFramework;
+import com.live2d.sdk.cubism.framework.ICubismLoadFileFunction;
 import com.live2d.sdk.cubism.framework.math.CubismMatrix44;
 import com.live2d.sdk.cubism.framework.model.CubismModel;
 import com.live2d.sdk.cubism.framework.rendering.CubismRenderer;
+import com.live2d.sdk.cubism.framework.rendering.android.shaderindex.CubismShaderIndexCalculator;
+import com.live2d.sdk.cubism.framework.rendering.android.shaderindex.CubismShaderIndexConstants;
+import com.live2d.sdk.cubism.framework.rendering.android.shaderindex.CubismShaderIndexFactors;
+import com.live2d.sdk.cubism.framework.rendering.csmBlendMode;
 import com.live2d.sdk.cubism.framework.type.csmRectF;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
 import static android.opengl.GLES20.*;
-import static com.live2d.sdk.cubism.framework.rendering.android.CubismShaderPrograms.*;
 import static com.live2d.sdk.cubism.framework.utils.CubismDebug.cubismLogError;
 
 /**
@@ -57,13 +65,13 @@ class CubismShaderAndroid {
     }
 
     /**
-     * Setup shader program.
+     * Setup shader program for a drawable.
      *
      * @param renderer renderer instance
      * @param model    rendered model
-     * @param index    target artmesh index
+     * @param index    target drawable index
      */
-    public void setupShaderProgramForDraw(
+    public void setupShaderProgramForDrawable(
         CubismRendererAndroid renderer,
         CubismModel model,
         int index
@@ -78,38 +86,61 @@ class CubismShaderAndroid {
         int srcAlpha;
         int dstAlpha;
 
-        // shaderSets用のオフセット計算
-        final boolean isMasked = renderer.getClippingContextBufferForDraw() != null;  // この描画オブジェクトはマスク対象か？
+        final boolean isMasked = renderer.getClippingContextBufferForDrawable() != null;  // この描画オブジェクトはマスク対象か？
         final boolean isInvertedMask = model.getDrawableInvertedMask(index);
         final boolean isPremultipliedAlpha = renderer.isPremultipliedAlpha();
 
-        final int offset = (isMasked ? (isInvertedMask ? 2 : 1) : 0) + (isPremultipliedAlpha ? 3 : 0);
+        final csmBlendMode blendMode = model.getDrawableBlendModeType(index);
 
-        // シェーダーセット
-        CubismShaderSet shaderSet;
-        switch (model.getDrawableBlendMode(index)) {
-            case NORMAL:
-            default:
-                shaderSet = this.shaderSets.get(ShaderNames.NORMAL.getId() + offset);
-                srcColor = GL_ONE;
-                dstColor = GL_ONE_MINUS_SRC_ALPHA;
-                srcAlpha = GL_ONE;
-                dstAlpha = GL_ONE_MINUS_SRC_ALPHA;
-                break;
-            case ADDITIVE:
-                shaderSet = shaderSets.get(ShaderNames.ADD.getId() + offset);
-                srcColor = GL_ONE;
-                dstColor = GL_ONE;
-                srcAlpha = GL_ZERO;
-                dstAlpha = GL_ONE;
-                break;
-            case MULTIPLICATIVE:
-                shaderSet = shaderSets.get(ShaderNames.MULT.getId() + offset);
-                srcColor = GL_DST_COLOR;
-                dstColor = GL_ONE_MINUS_SRC_ALPHA;
-                srcAlpha = GL_ZERO;
-                dstAlpha = GL_ONE;
-                break;
+        final int shaderIndex = CubismShaderIndexCalculator.calculateShaderIndex(
+            blendMode,
+            determineMaskState(isMasked, isInvertedMask),
+            isPremultipliedAlpha
+        );
+        CubismShaderSet shaderSet = shaderSets.get(shaderIndex);
+
+        boolean isBlendMode = false;
+        int blendTexture = 0;
+
+        // 5.3以降の高度なブレンドモードを使用している場合の処理
+        if (blendMode.isBlendMode()) {
+            isBlendMode = true;
+            srcColor = GL_ONE;
+            dstColor = GL_ZERO;
+            srcAlpha = GL_ONE;
+            dstAlpha = GL_ZERO;
+
+            // HACK: Copy用のShaderProgramに切り替わるのでここで処理を行う。
+            blendTexture = renderer.getCurrentOffscreen() != null
+                ? renderer.copyRenderTarget(renderer.getCurrentOffscreen().getRenderTarget()).getColorBuffer()[0]
+                : renderer.copyOffscreenRenderTarget().getColorBuffer()[0];
+        }
+        // 5.2以前のブレンドモードの場合以前の処理を実行する。
+        else {
+            switch (blendMode.getColorBlendType()) {
+                // Normal+Overの場合の処理。
+                // Over以外のアルファブレンドは、blendMode.isBlendMode()がtrueのときの分岐内で処理される。
+                case NORMAL:
+                    srcColor = GL_ONE;
+                    dstColor = GL_ONE_MINUS_SRC_ALPHA;
+                    srcAlpha = GL_ONE;
+                    dstAlpha = GL_ONE_MINUS_SRC_ALPHA;
+                    break;
+                case ADD_COMPATIBLE:
+                    srcColor = GL_ONE;
+                    dstColor = GL_ONE;
+                    srcAlpha = GL_ZERO;
+                    dstAlpha = GL_ONE;
+                    break;
+                case MULTIPLY_COMPATIBLE:
+                    srcColor = GL_DST_COLOR;
+                    dstColor = GL_ONE_MINUS_SRC_ALPHA;
+                    srcAlpha = GL_ZERO;
+                    dstAlpha = GL_ONE;
+                    break;
+                default:
+                    throw new IllegalStateException("Unknown blend type: " + blendMode.getColorBlendType());
+            }
         }
 
         glUseProgram(shaderSet.shaderProgram);
@@ -153,7 +184,7 @@ class CubismShaderAndroid {
             glActiveTexture(GL_TEXTURE1);
 
             // OffscreenSurfaceに描かれたテクスチャ
-            int tex = renderer.getMaskBuffer(renderer.getClippingContextBufferForDraw().bufferIndex).getColorBuffer()[0];
+            int tex = renderer.getDrawableMaskBuffer(renderer.getClippingContextBufferForDrawable().bufferIndex).getColorBuffer()[0];
             glBindTexture(GL_TEXTURE_2D, tex);
             glUniform1i(shaderSet.samplerTexture1Location, 1);
 
@@ -162,14 +193,14 @@ class CubismShaderAndroid {
                 shaderSet.uniformClipMatrixLocation,
                 1,
                 false,
-                renderer.getClippingContextBufferForDraw().matrixForDraw.getArray(),
+                renderer.getClippingContextBufferForDrawable().matrixForDraw.getArray(),
                 0
             );
 
             // Set used color channel.
-            final int channelIndex = renderer.getClippingContextBufferForDraw().layoutChannelIndex;
+            final int channelIndex = renderer.getClippingContextBufferForDrawable().layoutChannelIndex;
             CubismRenderer.CubismTextureColor colorChannel = renderer
-                .getClippingContextBufferForDraw()
+                .getClippingContextBufferForDrawable()
                 .getClippingManager()
                 .getChannelFlagAsColor(channelIndex);
             glUniform4f(
@@ -189,6 +220,13 @@ class CubismShaderAndroid {
         glBindTexture(GL_TEXTURE_2D, textureId);
         glUniform1i(shaderSet.samplerTexture0Location, 0);
 
+        // ブレンド設定
+        if (isBlendMode) {
+            glActiveTexture(GL_TEXTURE2);
+            glBindTexture(GL_TEXTURE_2D, blendTexture);
+            glUniform1i(shaderSet.samplerBlendTextureLocation, 2);
+        }
+
         // coordinate transformation
         CubismMatrix44 matrix44 = renderer.getMvpMatrix();
         glUniformMatrix4fv(
@@ -199,10 +237,30 @@ class CubismShaderAndroid {
             0
         );
 
-        // ベース色の取得
-        CubismRenderer.CubismTextureColor baseColor = renderer.getModelColorWithOpacity(
-            model.getDrawableOpacity(index)
-        );
+        CubismRenderer.CubismTextureColor baseColor = reusableBaseColor;
+        // 初期化
+        baseColor.r = 1.0f;
+        baseColor.g = 1.0f;
+        baseColor.b = 1.0f;
+        baseColor.a = 1.0f;
+
+        if (model.isBlendModeEnabled()) {
+            // ブレンドモードではモデルカラーは最後に処理するため不透明度のみ対応させる。
+            float drawableOpacity = model.getDrawableOpacity(index);
+            baseColor.a = drawableOpacity;
+
+            if (isPremultipliedAlpha) {
+                baseColor.r = drawableOpacity;
+                baseColor.g = drawableOpacity;
+                baseColor.b = drawableOpacity;
+            }
+        } else {
+            // ブレンドモードを使用しない場合はDrawable単位でモデルカラーを処理する。
+            baseColor = renderer.getModelColorWithOpacity(
+                model.getDrawableOpacity(index)
+            );
+        }
+
         CubismRenderer.CubismTextureColor multiplyColor = model.getMultiplyColor(index);
         CubismRenderer.CubismTextureColor screenColor = model.getScreenColor(index);
         glUniform4f(
@@ -230,6 +288,13 @@ class CubismShaderAndroid {
         glBlendFuncSeparate(srcColor, dstColor, srcAlpha, dstAlpha);
     }
 
+    /**
+     * Setup shader program for a clipping mask.
+     *
+     * @param renderer renderer instance
+     * @param model    rendered model
+     * @param index    target drawable index
+     */
     public void setupShaderProgramForMask(
         CubismRendererAndroid renderer,
         CubismModel model,
@@ -240,12 +305,13 @@ class CubismShaderAndroid {
         }
 
         // Blending
-        int srcColor;
-        int dstColor;
-        int srcAlpha;
-        int dstAlpha;
+        int srcColor = GL_ZERO;
+        int dstColor = GL_ONE_MINUS_SRC_COLOR;
+        int srcAlpha = GL_ZERO;
+        int dstAlpha = GL_ONE_MINUS_SRC_ALPHA;
 
-        CubismShaderSet shaderSet = shaderSets.get(ShaderNames.SETUP_MASK.id);
+        CubismShaderSet shaderSet = shaderSets.get(CubismShaderIndexFactors.UtilityShaderType.SETUP_MASK.index);
+
         glUseProgram(shaderSet.shaderProgram);
 
         // texture setting
@@ -289,19 +355,10 @@ class CubismShaderAndroid {
             uvArrayBuffer
         );
 
-        // channels
-        final int channelIndex = renderer.getClippingContextBufferForMask().layoutChannelIndex;
-        CubismRenderer.CubismTextureColor colorChannel = renderer
-            .getClippingContextBufferForMask()
-            .getClippingManager()
-            .getChannelFlagAsColor(channelIndex);
-
-        glUniform4f(
-            shaderSet.uniformChannelFlagLocation,
-            colorChannel.r,
-            colorChannel.g,
-            colorChannel.b,
-            colorChannel.a
+        // 使用するカラーチャンネルを設定
+        setColorChannelUniformVariables(
+            shaderSet,
+            renderer.getClippingContextBufferForMask()
         );
 
         glUniformMatrix4fv(
@@ -313,44 +370,353 @@ class CubismShaderAndroid {
         );
 
         csmRectF rect = renderer.getClippingContextBufferForMask().layoutBounds;
+        CubismRenderer.CubismTextureColor baseColor = reusableBaseColor;
+        baseColor.r = rect.getX() * 2.0f - 1.0f;
+        baseColor.g = rect.getY() * 2.0f - 1.0f;
+        baseColor.b = rect.getRight() * 2.0f - 1.0f;
+        baseColor.a = rect.getBottom() * 2.0f - 1.0f;
 
         glUniform4f(
             shaderSet.uniformBaseColorLocation,
-            rect.getX() * 2.0f - 1.0f,
-            rect.getY() * 2.0f - 1.0f,
-            rect.getRight() * 2.0f - 1.0f,
-            rect.getBottom() * 2.0f - 1.0f
+            baseColor.r,
+            baseColor.g,
+            baseColor.b,
+            baseColor.a
         );
-
-        CubismRenderer.CubismTextureColor multiplyColor = model.getMultiplyColor(index);
-        CubismRenderer.CubismTextureColor screenColor = model.getScreenColor(index);
-        glUniform4f(
-            shaderSet.uniformMultiplyColorLocation,
-            multiplyColor.r,
-            multiplyColor.g,
-            multiplyColor.b,
-            multiplyColor.a
-        );
-        glUniform4f(
-            shaderSet.uniformScreenColorLocation,
-            screenColor.r,
-            screenColor.g,
-            screenColor.b,
-            screenColor.a
-        );
-
-        srcColor = GL_ZERO;
-        dstColor = GL_ONE_MINUS_SRC_COLOR;
-        srcAlpha = GL_ZERO;
-        dstAlpha = GL_ONE_MINUS_SRC_ALPHA;
 
         glBlendFuncSeparate(srcColor, dstColor, srcAlpha, dstAlpha);
     }
 
     /**
+     * Setup shader program for offscreen render target.
+     *
+     * @param renderer renderer instance
+     */
+    public void setupShaderProgramForOffscreenRenderTarget(CubismRendererAndroid renderer) {
+        int texture = renderer.copyOffscreenRenderTarget().getColorBuffer()[0];
+
+        // この時点のテクスチャはPMAになっているはずなので計算を行う。
+        CubismRenderer.CubismTextureColor baseColor = renderer.getModelColor();
+        baseColor.r *= baseColor.a;
+        baseColor.g *= baseColor.a;
+        baseColor.b *= baseColor.a;
+        copyTexture(
+            texture,
+            GL_ONE,
+            GL_ONE_MINUS_SRC_ALPHA,
+            GL_ONE,
+            GL_ONE_MINUS_SRC_ALPHA,
+            baseColor
+        );
+    }
+
+    public void setupShaderProgramForOffscreen(
+        CubismRendererAndroid renderer,
+        final CubismModel model,
+        final CubismOffscreenRenderTargetAndroid offscreen
+    ) {
+        if (shaderSets.isEmpty()) {
+            generateShaders();
+        }
+
+        // Blending
+        int srcColor;
+        int dstColor;
+        int srcAlpha;
+        int dstAlpha;
+
+        int offscreenIndex = offscreen.getOffscreenIndex();
+
+        final boolean isMasked = renderer.getClippingContextBufferForOffscreen() != null;  // この描画オブジェクトはマスク対象か？
+        final boolean isInvertedMask = model.getOffscreenInvertedMask(offscreenIndex);
+        final boolean isPremultipliedAlpha = renderer.isPremultipliedAlpha();
+
+        final csmBlendMode blendMode = model.getOffscreenBlendModeType(offscreenIndex);
+
+        final int shaderIndex = CubismShaderIndexCalculator.calculateShaderIndex(
+            blendMode,
+            determineMaskState(isMasked, isInvertedMask),
+            isPremultipliedAlpha
+        );
+        CubismShaderSet shaderSet = shaderSets.get(shaderIndex);
+
+        boolean isBlendMode = false;
+        int blendTexture = 0;
+
+        // 5.3以降の高度なブレンドモードを使用している場合の処理
+        if (blendMode.isBlendMode()) {
+            isBlendMode = true;
+            srcColor = GL_ONE;
+            dstColor = GL_ZERO;
+            srcAlpha = GL_ONE;
+            dstAlpha = GL_ZERO;
+
+            // 以前のオフスクリーンのテクスチャを取得。
+            // HACK: ES でCopy用の ShaderProgram に切り替わるのでここで処理を行う。
+            blendTexture = offscreen.getOldOffscreen() != null
+                ? renderer.copyRenderTarget(offscreen.getOldOffscreen().getRenderTarget()).getColorBuffer()[0]
+                : renderer.copyOffscreenRenderTarget().getColorBuffer()[0];
+        }
+        // 5.2以前のブレンドモードの場合以前の処理を実行する。
+        else {
+            switch (blendMode.getColorBlendType()) {
+                case NORMAL:
+                    srcColor = GL_ONE;
+                    dstColor = GL_ONE_MINUS_SRC_ALPHA;
+                    srcAlpha = GL_ONE;
+                    dstAlpha = GL_ONE_MINUS_SRC_ALPHA;
+                    break;
+                case ADD_COMPATIBLE:
+                    srcColor = GL_ONE;
+                    dstColor = GL_ONE;
+                    srcAlpha = GL_ZERO;
+                    dstAlpha = GL_ONE;
+                    break;
+                case MULTIPLY_COMPATIBLE:
+                    srcColor = GL_DST_COLOR;
+                    dstColor = GL_ONE_MINUS_SRC_ALPHA;
+                    srcAlpha = GL_ZERO;
+                    dstAlpha = GL_ONE;
+                    break;
+                default:
+                    throw new IllegalStateException("Unknown blend type: " + blendMode.getColorBlendType());
+            }
+        }
+
+        glUseProgram(shaderSet.shaderProgram);
+
+        // オフスクリーンのテクスチャ設定
+        glActiveTexture(GL_TEXTURE0);
+        int offscreenTex = offscreen.getRenderTarget().getColorBuffer()[0];
+        glBindTexture(GL_TEXTURE_2D, offscreenTex);
+        glUniform1i(shaderSet.samplerTexture0Location, 0);
+
+        // 頂点位置属性の設定
+        glEnableVertexAttribArray(shaderSet.attributePositionLocation);
+        glVertexAttribPointer(
+            shaderSet.attributePositionLocation,
+            2,
+            GL_FLOAT,
+            false,
+            Float.SIZE / Byte.SIZE * 2,
+            RENDER_TARGET_VERTEX_BUFFER
+        );
+
+        // テクスチャ座標属性の設定
+        glEnableVertexAttribArray(shaderSet.attributeTexCoordLocation);
+        glVertexAttribPointer(
+            shaderSet.attributeTexCoordLocation,
+            2,
+            GL_FLOAT,
+            false,
+            Float.SIZE / Byte.SIZE * 2,
+            RENDER_TARGET_REVERSE_UV_BUFFER
+        );
+
+        if (isMasked) {
+            glActiveTexture(GL_TEXTURE1);
+
+            // FrameBufferに描かれたテクスチャ
+            int tex = renderer.getOffscreenMaskBuffer(renderer.getClippingContextBufferForOffscreen().bufferIndex).getColorBuffer()[0];
+            glBindTexture(GL_TEXTURE_2D, tex);
+            glUniform1i(shaderSet.samplerTexture1Location, 1);
+
+            // View座標をClippingContextの座標に変換するための行列を設定
+            glUniformMatrix4fv(
+                shaderSet.uniformClipMatrixLocation,
+                1,
+                false,
+                renderer.getClippingContextBufferForOffscreen().matrixForDraw.getArray(),
+                0
+            );
+
+            // 使用するカラーチャンネルを設定
+            setColorChannelUniformVariables(shaderSet, renderer.getClippingContextBufferForOffscreen());
+        }
+
+        // ブレンド設定
+        if (isBlendMode) {
+            glActiveTexture(GL_TEXTURE2);
+            glBindTexture(GL_TEXTURE_2D, blendTexture);
+            glUniform1i(shaderSet.samplerBlendTextureLocation, 2);
+        }
+
+        // 座標変換
+        CubismMatrix44 mvpMatrix = reusableMatrix;
+        mvpMatrix.loadIdentity();
+        glUniformMatrix4fv(
+            shaderSet.uniformMatrixLocation,
+            1,
+            false,
+            mvpMatrix.getArray(),
+            0
+        );
+
+        // ユニフォーム変数設定
+        float offscreenOpacity = model.getOffscreenOpacity(offscreenIndex);
+
+        // PMAなのと不透明度だけを変更したいためすべてOpacityで初期化
+        CubismRenderer.CubismTextureColor baseColor = reusableBaseColor;
+
+        // 初期化
+        baseColor.r = offscreenOpacity;
+        baseColor.g = offscreenOpacity;
+        baseColor.b = offscreenOpacity;
+        baseColor.a = offscreenOpacity;
+
+        CubismRenderer.CubismTextureColor multiplyColor = model.getMultiplyColorOffscreen(offscreenIndex);
+        CubismRenderer.CubismTextureColor screenColor = model.getScreenColorOffscreen(offscreenIndex);
+        setColorUniformVariables(renderer, model, offscreenIndex, shaderSet, baseColor, multiplyColor, screenColor);
+
+        glBlendFuncSeparate(srcColor, dstColor, srcAlpha, dstAlpha);
+    }
+
+    /**
+     * Copy the render target using a shader.
+     *
+     * @param texture texture
+     */
+    public void copyTexture(int texture) {
+        CubismRenderer.CubismTextureColor baseColor = reusableBaseColor;
+        // 初期化して渡す。
+        baseColor.r = 1.0f;
+        baseColor.g = 1.0f;
+        baseColor.b = 1.0f;
+        baseColor.a = 1.0f;
+
+        copyTexture(
+            texture,
+            GL_ONE,
+            GL_ZERO,
+            GL_ONE,
+            GL_ZERO,
+            baseColor
+        );
+    }
+
+    /**
+     * Copy the render target using a shader.
+     *
+     * @param texture   texture
+     * @param srcColor  source color blend factor
+     * @param dstColor  destination color blend factor
+     * @param srcAlpha  source alpha blend factor
+     * @param dstAlpha  destination alpha blend factor
+     * @param baseColor base color blend factor
+     */
+    public void copyTexture(
+        int texture,
+        int srcColor,
+        int dstColor,
+        int srcAlpha,
+        int dstAlpha,
+        CubismRenderer.CubismTextureColor baseColor
+    ) {
+        if (shaderSets.isEmpty()) {
+            generateShaders();
+        }
+
+        CubismShaderSet shaderSet = shaderSets.get(CubismShaderIndexFactors.UtilityShaderType.COPY.index);
+        glUseProgram(shaderSet.shaderProgram);
+
+        // オフスクリーンの内容を設定
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, texture);
+        glUniform1i(shaderSet.samplerTexture0Location, 0);
+
+        // 頂点位置属性の設定
+        glEnableVertexAttribArray(shaderSet.attributePositionLocation);
+        glVertexAttribPointer(
+            shaderSet.attributePositionLocation,
+            2,
+            GL_FLOAT,
+            false,
+            Float.SIZE / Byte.SIZE * 2,
+            RENDER_TARGET_VERTEX_BUFFER
+        );
+
+        // テクスチャ座標属性の設定
+        glEnableVertexAttribArray(shaderSet.attributeTexCoordLocation);
+        glVertexAttribPointer(
+            shaderSet.attributeTexCoordLocation,
+            2,
+            GL_FLOAT,
+            false,
+            Float.SIZE / Byte.SIZE * 2,
+            RENDER_TARGET_UV_BUFFER
+        );
+
+        // ベースカラーの設定
+        glUniform4f(
+            shaderSet.uniformBaseColorLocation,
+            baseColor.r,
+            baseColor.g,
+            baseColor.b,
+            baseColor.a
+        );
+
+        glBlendFuncSeparate(srcColor, dstColor, srcAlpha, dstAlpha);
+    }
+
+    /**
+     * Base path for shader files used in the Android renderer.
+     * This path is relative to the Framework's assets folder.
+     * <p>
+     * NOTE: Uses a unique path to avoid conflicts with the application's assets.
+     */
+    private static final String SHADER_BASE_PATH = "com/live2d/sdk/cubism/framework/shaders/standardES";
+
+    /**
+     * Path to the color blend fragment shader file.
+     */
+    private static final String COLOR_BLEND_SHADER_PATH = SHADER_BASE_PATH + "/FragShaderSrcColorBlend.frag";
+
+    /**
+     * Path to the alpha blend fragment shader file.
+     */
+    private static final String ALPHA_BLEND_SHADER_PATH = SHADER_BASE_PATH + "/FragShaderSrcAlphaBlend.frag";
+
+    /**
      * Singleton instance.
      */
     private static CubismShaderAndroid s_instance;
+
+    /**
+     * Vertex buffer for render target.
+     * Four vertex coordinates (bottom-left, bottom-right, top-left, top-right) of a rectangle
+     * that covers the entire screen, used during texture copying.
+     * Defined in normalized device coordinates (-1.0 to 1.0).
+     */
+    private static final FloatBuffer RENDER_TARGET_VERTEX_BUFFER = toNativeFloatBuffer(new float[]{
+        -1.0f, -1.0f,
+        1.0f, -1.0f,
+        -1.0f, 1.0f,
+        1.0f, 1.0f,
+    });
+
+    /**
+     * UV buffer for render target.
+     * Texture coordinates (bottom-left, bottom-right, top-left, top-right) used during texture copying.
+     * Defined in UV coordinate system (0.0 to 1.0).
+     */
+    private static final FloatBuffer RENDER_TARGET_UV_BUFFER = toNativeFloatBuffer(new float[]{
+        0.0f, 0.0f,
+        1.0f, 0.0f,
+        0.0f, 1.0f,
+        1.0f, 1.0f,
+    });
+
+    /**
+     * Reversed UV buffer for render target.
+     * Texture coordinates (top-left, top-right, bottom-left, bottom-right) used during texture copying.
+     * Defined in UV coordinate system (0.0 to 1.0).
+     */
+    private static final FloatBuffer RENDER_TARGET_REVERSE_UV_BUFFER = toNativeFloatBuffer(new float[]{
+        0.0f, 1.0f,
+        1.0f, 1.0f,
+        0.0f, 0.0f,
+        1.0f, 0.0f,
+    });
 
     /**
      * Tegra support. Drawing with Extended Method.
@@ -360,48 +726,6 @@ class CubismShaderAndroid {
      * Variable for setting the PA of the extension method.
      */
     private static boolean EXT_PA_MODE;
-
-    /**
-     * Shader names
-     */
-    private enum ShaderNames {
-        // Setup Mask
-        SETUP_MASK(0),
-
-        // Normal
-        NORMAL(1),
-        NORMAL_MASKED(2),
-        NORMAL_MASKED_INVERTED(3),
-        NORMAL_PREMULTIPLIED_ALPHA(4),
-        NORMAL_MASKED_PREMULTIPLIED_ALPHA(5),
-        NORMAL_MASKED_INVERTED_PREMULTIPLIED_ALPHA(6),
-
-        // Add
-        ADD(7),
-        ADD_MASKED(8),
-        ADD_MASKED_INVERTED(9),
-        ADD_PREMULTIPLIED_ALPHA(10),
-        ADD_MASKED_PREMULTIPLIED_ALPHA(11),
-        ADD_MASKED_PREMULTIPLIED_ALPHA_INVERTED(12),
-
-        // Multi
-        MULT(13),
-        MULT_MASKED(14),
-        MULT_MASKED_INVERTED(15),
-        MULT_PREMULTIPLIED_ALPHA(16),
-        MULT_MASKED_PREMULTIPLIED_ALPHA(17),
-        MULT_MASKED_PREMULTIPLIED_ALPHA_INVERTED(18);
-
-        private final int id;
-
-        ShaderNames(int id) {
-            this.id = id;
-        }
-
-        private int getId() {
-            return id;
-        }
-    }
 
     /**
      * Data class that holds the addresses of shader programs and shader variables
@@ -436,6 +760,10 @@ class CubismShaderAndroid {
          */
         int samplerTexture1Location;
         /**
+         * Address of the variable to be passed to the shader program(BlendTexture)
+         */
+        int samplerBlendTextureLocation;
+        /**
          * Address of the variable to be passed to the shader program (BaseColor)
          */
         int uniformBaseColorLocation;
@@ -451,6 +779,114 @@ class CubismShaderAndroid {
          * Address of the variable to be passed to the shader program (ChannelFlag)
          */
         int uniformChannelFlagLocation;
+    }
+
+    /**
+     *
+     * Convert the given float array to a native byte order FloatBuffer for OpenGL ES API.
+     *
+     * @param array float array to convert
+     * @return converted FloatBuffer(position is set to 0)
+     */
+    private static FloatBuffer toNativeFloatBuffer(float[] array) {
+        FloatBuffer buffer = ByteBuffer
+            .allocateDirect(array.length * Float.BYTES)
+            .order(ByteOrder.nativeOrder())
+            .asFloatBuffer()
+            .put(array);
+        buffer.position(0);
+        return buffer;
+    }
+
+    /**
+     * Set the CubismShaderSet.
+     *
+     * @param shaderSets   shader configuration
+     * @param maskType    mask type
+     */
+    private static void setShaderSet(
+        CubismShaderSet shaderSets,
+        CubismShaderIndexFactors.MaskType maskType
+    ) {
+        setShaderSet(shaderSets, maskType, false);
+    }
+
+    /**
+     * Retrieves and sets the required shader variable locations in the shaderSet based on mask type and blend mode.
+     *
+     * @param shaderSet   shader configuration
+     * @param maskType    mask type
+     * @param isBlendMode whether blend mode is active
+     * @throws IllegalArgumentException if {@code maskType} is invalid
+     */
+    private static void setShaderSet(
+        CubismShaderSet shaderSet,
+        CubismShaderIndexFactors.MaskType maskType,
+        boolean isBlendMode
+    ) {
+        shaderSet.attributePositionLocation = glGetAttribLocation(shaderSet.shaderProgram, "a_position");
+        shaderSet.attributeTexCoordLocation = glGetAttribLocation(shaderSet.shaderProgram, "a_texCoord");
+        shaderSet.samplerTexture0Location = glGetUniformLocation(shaderSet.shaderProgram, "s_texture0");
+
+        if (isBlendMode) {
+            shaderSet.samplerBlendTextureLocation = glGetUniformLocation(shaderSet.shaderProgram, "s_blendTexture");
+        }
+
+        shaderSet.uniformMatrixLocation = glGetUniformLocation(shaderSet.shaderProgram, "u_matrix");
+        shaderSet.uniformBaseColorLocation = glGetUniformLocation(shaderSet.shaderProgram, "u_baseColor");
+        shaderSet.uniformMultiplyColorLocation = glGetUniformLocation(shaderSet.shaderProgram, "u_multiplyColor");
+        shaderSet.uniformScreenColorLocation = glGetUniformLocation(shaderSet.shaderProgram, "u_screenColor");
+
+        switch (maskType) {
+            case NONE:
+                break;
+            case MASKED:    // クリッピング
+                shaderSet.samplerTexture1Location = glGetUniformLocation(shaderSet.shaderProgram, "s_texture1");
+                shaderSet.uniformClipMatrixLocation = glGetUniformLocation(shaderSet.shaderProgram, "u_clipMatrix");
+                shaderSet.uniformChannelFlagLocation = glGetUniformLocation(shaderSet.shaderProgram, "u_channelFlag");
+                break;
+            case MASKED_INVERTED:   // クリッピング・反転
+                shaderSet.samplerTexture1Location = glGetUniformLocation(shaderSet.shaderProgram, "s_texture1");
+                shaderSet.uniformClipMatrixLocation = glGetUniformLocation(shaderSet.shaderProgram, "u_clipMatrix");
+                shaderSet.uniformChannelFlagLocation = glGetUniformLocation(shaderSet.shaderProgram, "u_channelFlag");
+                break;
+            case PREMULTIPLIED_ALPHA:
+                break;
+            case MASKED_PREMULTIPLIED_ALPHA:    // クリッピング、PremultipliedAlpha
+                shaderSet.samplerTexture1Location = glGetUniformLocation(shaderSet.shaderProgram, "s_texture1");
+                shaderSet.uniformClipMatrixLocation = glGetUniformLocation(shaderSet.shaderProgram, "u_clipMatrix");
+                shaderSet.uniformChannelFlagLocation = glGetUniformLocation(shaderSet.shaderProgram, "u_channelFlag");
+                break;
+            case MASKED_INVERTED_PREMULTIPLIED_ALPHA:   // クリッピング・反転、PremultipliedAlpha
+                shaderSet.samplerTexture1Location = glGetUniformLocation(shaderSet.shaderProgram, "s_texture1");
+                shaderSet.uniformClipMatrixLocation = glGetUniformLocation(shaderSet.shaderProgram, "u_clipMatrix");
+                shaderSet.uniformChannelFlagLocation = glGetUniformLocation(shaderSet.shaderProgram, "u_channelFlag");
+                break;
+            default:
+                throw new IllegalArgumentException("Invalid mask type: " + maskType);
+        }
+    }
+
+    /**
+     * Determine the clipping mask state based on mask flags.
+     *
+     * @param isMasked       whether the clipping mask is active
+     * @param isInvertedMask whether the clipping mask is inverted
+     * @return clipping mask state(NONE/NORMAL/INVERTED)
+     */
+    private static CubismShaderIndexFactors.MaskState determineMaskState(
+        boolean isMasked,
+        boolean isInvertedMask
+    ) {
+        if (isMasked) {
+            if (isInvertedMask) {
+                return CubismShaderIndexFactors.MaskState.INVERTED;
+            } else {
+                return CubismShaderIndexFactors.MaskState.NORMAL;
+            }
+        } else {
+            return CubismShaderIndexFactors.MaskState.NONE;
+        }
     }
 
     /**
@@ -474,251 +910,264 @@ class CubismShaderAndroid {
      * Initialize and generate shader programs.
      */
     private void generateShaders() {
-        for (int i = 0; i < SHADER_COUNT; i++) {
+        for (int i = 0; i < CubismShaderIndexConstants.SHADER_COUNT; i++) {
             shaderSets.add(new CubismShaderSet());
         }
 
+        int normalBaseIndex = CubismShaderIndexConstants.NORMAL_OVER_BASE_INDEX;
+
         if (EXT_MODE) {
-            shaderSets.get(0).shaderProgram = loadShaderProgram(VERT_SHADER_SRC_SETUP_MASK, FRAG_SHADER_SRC_SETUP_MASK_TEGRA);
-            shaderSets.get(1).shaderProgram = loadShaderProgram(VERT_SHADER_SRC, FRAG_SHADER_SRC_TEGRA);
-            shaderSets.get(2).shaderProgram = loadShaderProgram(VERT_SHADER_SRC_MASKED, FRAG_SHADER_SRC_MASK_TEGRA);
-            shaderSets.get(3).shaderProgram = loadShaderProgram(VERT_SHADER_SRC_MASKED, FRAG_SHADER_SRC_MASK_INVERTED_TEGRA);
-            shaderSets.get(4).shaderProgram = loadShaderProgram(VERT_SHADER_SRC, FRAG_SHADER_SRC_PREMULTIPLIED_ALPHA_TEGRA);
-            shaderSets.get(5).shaderProgram = loadShaderProgram(VERT_SHADER_SRC_MASKED, FRAG_SHADER_SRC_MASK_PREMULTIPLIED_ALPHA_TEGRA);
-            shaderSets.get(6).shaderProgram = loadShaderProgram(VERT_SHADER_SRC_MASKED, FRAG_SHADER_SRC_MASK_INVERTED_PREMULTIPLIED_ALPHA_TEGRA);
+            shaderSets.get(CubismShaderIndexFactors.UtilityShaderType.COPY.index).shaderProgram = loadShaderProgramFromFile("VertShaderSrcCopy.vert", "FragShaderSrcCopyTegra.frag");
+            shaderSets.get(CubismShaderIndexFactors.UtilityShaderType.SETUP_MASK.index).shaderProgram = loadShaderProgramFromFile("VertShaderSrcSetupMask.vert", "FragShaderSrcSetupMaskTegra.frag");
+
+            shaderSets.get(normalBaseIndex).shaderProgram = loadShaderProgramFromFile("VertShaderSrc.vert", "FragShaderSrcTegra.frag");
+            shaderSets.get(normalBaseIndex + 1).shaderProgram = loadShaderProgramFromFile("VertShaderSrcMasked.vert", "FragShaderSrcMaskTegra.frag");
+            shaderSets.get(normalBaseIndex + 2).shaderProgram = loadShaderProgramFromFile("VertShaderSrcMasked.vert", "FragShaderSrcMaskInvertedTegra.frag");
+            shaderSets.get(normalBaseIndex + 3).shaderProgram = loadShaderProgramFromFile("VertShaderSrc.vert", "FragShaderSrcPremultipliedAlphaTegra.frag");
+            shaderSets.get(normalBaseIndex + 4).shaderProgram = loadShaderProgramFromFile("VertShaderSrcMasked.vert", "FragShaderSrcMaskPremultipliedAlphaTegra.frag");
+            shaderSets.get(normalBaseIndex + 5).shaderProgram = loadShaderProgramFromFile("VertShaderSrcMasked.vert", "FragShaderSrcMaskInvertedPremultipliedAlphaTegra.frag");
+
+            // ブレンドモードの組み合わせ分作成
+            {
+                int offset = CubismShaderIndexConstants.BLEND_MODE_START_INDEX;
+
+                CubismShaderIndexFactors.ColorBlendMode[] colorBlendModes = CubismShaderIndexFactors.ColorBlendMode.values();
+                CubismShaderIndexFactors.AlphaBlendMode[] alphaBlendModes = CubismShaderIndexFactors.AlphaBlendMode.values();
+
+                for (int i = 0; i < colorBlendModes.length; i++) {
+                    // Normal Overはシェーダーを作る必要がないため、1から始める。
+                    final boolean isNormal = colorBlendModes[i] == CubismShaderIndexFactors.ColorBlendMode.NORMAL;
+                    final int start = isNormal ? 1 : 0;
+
+                    for (int j = start; j < CubismShaderIndexConstants.ALPHA_BLEND_COUNT; j++) {
+                        shaderSets.get(offset++).shaderProgram = loadShaderProgramFromFile("VertShaderSrcBlend.vert", "FragShaderSrcBlendTegra.frag", colorBlendModes[i], alphaBlendModes[j]);
+                        shaderSets.get(offset++).shaderProgram = loadShaderProgramFromFile("VertShaderSrcMaskedBlend.vert", "FragShaderSrcMaskBlendTegra.frag", colorBlendModes[i], alphaBlendModes[j]);
+                        shaderSets.get(offset++).shaderProgram = loadShaderProgramFromFile("VertShaderSrcMaskedBlend.vert", "FragShaderSrcMaskInvertedBlendTegra.frag", colorBlendModes[i], alphaBlendModes[j]);
+                        shaderSets.get(offset++).shaderProgram = loadShaderProgramFromFile("VertShaderSrcBlend.vert", "FragShaderSrcPremultipliedAlphaBlendTegra.frag", colorBlendModes[i], alphaBlendModes[j]);
+                        shaderSets.get(offset++).shaderProgram = loadShaderProgramFromFile("VertShaderSrcMaskedBlend.vert", "FragShaderSrcMaskPremultipliedAlphaBlendTegra.frag", colorBlendModes[i], alphaBlendModes[j]);
+                        shaderSets.get(offset++).shaderProgram = loadShaderProgramFromFile("VertShaderSrcMaskedBlend.vert", "FragShaderSrcMaskInvertedPremultipliedAlphaBlendTegra.frag", colorBlendModes[i], alphaBlendModes[j]);
+                    }
+                }
+            }
         } else {
-            shaderSets.get(0).shaderProgram = loadShaderProgram(VERT_SHADER_SRC_SETUP_MASK, FRAG_SHADER_SRC_SETUP_MASK);
-            shaderSets.get(1).shaderProgram = loadShaderProgram(VERT_SHADER_SRC, FRAG_SHADER_SRC);
-            shaderSets.get(2).shaderProgram = loadShaderProgram(VERT_SHADER_SRC_MASKED, FRAG_SHADER_SRC_MASK);
-            shaderSets.get(3).shaderProgram = loadShaderProgram(VERT_SHADER_SRC_MASKED, FRAG_SHADER_SRC_MASK_INVERTED);
-            shaderSets.get(4).shaderProgram = loadShaderProgram(VERT_SHADER_SRC, FRAG_SHADER_SRC_PREMULTIPLIED_ALPHA);
-            shaderSets.get(5).shaderProgram = loadShaderProgram(VERT_SHADER_SRC_MASKED, FRAG_SHADER_SRC_MASK_PREMULTIPLIED_ALPHA);
-            shaderSets.get(6).shaderProgram = loadShaderProgram(VERT_SHADER_SRC_MASKED, FRAG_SHADER_SRC_MASK_INVERTED_PREMULTIPLIED_ALPHA);
+            shaderSets.get(CubismShaderIndexFactors.UtilityShaderType.COPY.index).shaderProgram = loadShaderProgramFromFile("VertShaderSrcCopy.vert", "FragShaderSrcCopy.frag");
+            shaderSets.get(CubismShaderIndexFactors.UtilityShaderType.SETUP_MASK.index).shaderProgram = loadShaderProgramFromFile("VertShaderSrcSetupMask.vert", "FragShaderSrcSetupMask.frag");
+
+            shaderSets.get(normalBaseIndex).shaderProgram = loadShaderProgramFromFile("VertShaderSrc.vert", "FragShaderSrc.frag");
+            shaderSets.get(normalBaseIndex + 1).shaderProgram = loadShaderProgramFromFile("VertShaderSrcMasked.vert", "FragShaderSrcMask.frag");
+            shaderSets.get(normalBaseIndex + 2).shaderProgram = loadShaderProgramFromFile("VertShaderSrcMasked.vert", "FragShaderSrcMaskInverted.frag");
+            shaderSets.get(normalBaseIndex + 3).shaderProgram = loadShaderProgramFromFile("VertShaderSrc.vert", "FragShaderSrcPremultipliedAlpha.frag");
+            shaderSets.get(normalBaseIndex + 4).shaderProgram = loadShaderProgramFromFile("VertShaderSrcMasked.vert", "FragShaderSrcMaskPremultipliedAlpha.frag");
+            shaderSets.get(normalBaseIndex + 5).shaderProgram = loadShaderProgramFromFile("VertShaderSrcMasked.vert", "FragShaderSrcMaskInvertedPremultipliedAlpha.frag");
+
+            // ブレンドモードの組み合わせ分作成
+            {
+                int offset = CubismShaderIndexConstants.BLEND_MODE_START_INDEX;
+
+                CubismShaderIndexFactors.ColorBlendMode[] colorBlendModes = CubismShaderIndexFactors.ColorBlendMode.values();
+                CubismShaderIndexFactors.AlphaBlendMode[] alphaBlendModes = CubismShaderIndexFactors.AlphaBlendMode.values();
+
+                for (int i = 0; i < colorBlendModes.length; i++) {
+                    // Normal Overはシェーダーを作る必要がないため、1から始める。
+                    final boolean isNormal = colorBlendModes[i] == CubismShaderIndexFactors.ColorBlendMode.NORMAL;
+                    final int start = isNormal ? 1 : 0;
+
+                    for (int j = start; j < CubismShaderIndexConstants.ALPHA_BLEND_COUNT; j++) {
+                        shaderSets.get(offset++).shaderProgram = loadShaderProgramFromFile("VertShaderSrcBlend.vert", "FragShaderSrcBlend.frag", colorBlendModes[i], alphaBlendModes[j]);
+                        shaderSets.get(offset++).shaderProgram = loadShaderProgramFromFile("VertShaderSrcMaskedBlend.vert", "FragShaderSrcMaskBlend.frag", colorBlendModes[i], alphaBlendModes[j]);
+                        shaderSets.get(offset++).shaderProgram = loadShaderProgramFromFile("VertShaderSrcMaskedBlend.vert", "FragShaderSrcMaskInvertedBlend.frag", colorBlendModes[i], alphaBlendModes[j]);
+                        shaderSets.get(offset++).shaderProgram = loadShaderProgramFromFile("VertShaderSrcBlend.vert", "FragShaderSrcPremultipliedAlphaBlend.frag", colorBlendModes[i], alphaBlendModes[j]);
+                        shaderSets.get(offset++).shaderProgram = loadShaderProgramFromFile("VertShaderSrcMaskedBlend.vert", "FragShaderSrcMaskPremultipliedAlphaBlend.frag", colorBlendModes[i], alphaBlendModes[j]);
+                        shaderSets.get(offset++).shaderProgram = loadShaderProgramFromFile("VertShaderSrcMaskedBlend.vert", "FragShaderSrcMaskInvertedPremultipliedAlphaBlend.frag", colorBlendModes[i], alphaBlendModes[j]);
+                    }
+                }
+            }
         }
 
         // 加算も通常と同じシェーダーを利用する
-        shaderSets.get(7).shaderProgram = shaderSets.get(1).shaderProgram;
-        shaderSets.get(8).shaderProgram = shaderSets.get(2).shaderProgram;
-        shaderSets.get(9).shaderProgram = shaderSets.get(3).shaderProgram;
-        shaderSets.get(10).shaderProgram = shaderSets.get(4).shaderProgram;
-        shaderSets.get(11).shaderProgram = shaderSets.get(5).shaderProgram;
-        shaderSets.get(12).shaderProgram = shaderSets.get(6).shaderProgram;
+        int addBaseIndex = CubismShaderIndexConstants.ADD_COMPATIBLE_BASE_INDEX;
+        shaderSets.get(addBaseIndex).shaderProgram = shaderSets.get(normalBaseIndex).shaderProgram;
+        shaderSets.get(addBaseIndex + 1).shaderProgram = shaderSets.get(normalBaseIndex + 1).shaderProgram;
+        shaderSets.get(addBaseIndex + 2).shaderProgram = shaderSets.get(normalBaseIndex + 2).shaderProgram;
+        shaderSets.get(addBaseIndex + 3).shaderProgram = shaderSets.get(normalBaseIndex + 3).shaderProgram;
+        shaderSets.get(addBaseIndex + 4).shaderProgram = shaderSets.get(normalBaseIndex + 4).shaderProgram;
+        shaderSets.get(addBaseIndex + 5).shaderProgram = shaderSets.get(normalBaseIndex + 5).shaderProgram;
 
         // 乗算も通常と同じシェーダーを利用する
-        shaderSets.get(13).shaderProgram = shaderSets.get(1).shaderProgram;
-        shaderSets.get(14).shaderProgram = shaderSets.get(2).shaderProgram;
-        shaderSets.get(15).shaderProgram = shaderSets.get(3).shaderProgram;
-        shaderSets.get(16).shaderProgram = shaderSets.get(4).shaderProgram;
-        shaderSets.get(17).shaderProgram = shaderSets.get(5).shaderProgram;
-        shaderSets.get(18).shaderProgram = shaderSets.get(6).shaderProgram;
+        int multiplyBaseIndex = CubismShaderIndexConstants.MULTIPLY_COMPATIBLE_BASE_INDEX;
+        shaderSets.get(multiplyBaseIndex).shaderProgram = shaderSets.get(normalBaseIndex).shaderProgram;
+        shaderSets.get(multiplyBaseIndex + 1).shaderProgram = shaderSets.get(normalBaseIndex + 1).shaderProgram;
+        shaderSets.get(multiplyBaseIndex + 2).shaderProgram = shaderSets.get(normalBaseIndex + 2).shaderProgram;
+        shaderSets.get(multiplyBaseIndex + 3).shaderProgram = shaderSets.get(normalBaseIndex + 3).shaderProgram;
+        shaderSets.get(multiplyBaseIndex + 4).shaderProgram = shaderSets.get(normalBaseIndex + 4).shaderProgram;
+        shaderSets.get(multiplyBaseIndex + 5).shaderProgram = shaderSets.get(normalBaseIndex + 5).shaderProgram;
+
+        // Copy
+        final int copyShaderIndex = CubismShaderIndexFactors.UtilityShaderType.COPY.index;
+        shaderSets.get(copyShaderIndex).attributePositionLocation = glGetAttribLocation(shaderSets.get(copyShaderIndex).shaderProgram, "a_position");
+        shaderSets.get(copyShaderIndex).attributeTexCoordLocation = glGetAttribLocation(shaderSets.get(copyShaderIndex).shaderProgram, "a_texCoord");
+        shaderSets.get(copyShaderIndex).samplerTexture0Location = glGetUniformLocation(shaderSets.get(copyShaderIndex).shaderProgram, "s_texture0");
+        shaderSets.get(copyShaderIndex).uniformBaseColorLocation = glGetUniformLocation(shaderSets.get(copyShaderIndex).shaderProgram, "u_baseColor");
 
         // Setup mask
-        shaderSets.get(0).attributePositionLocation = glGetAttribLocation(shaderSets.get(0).shaderProgram, "a_position");
-        shaderSets.get(0).attributeTexCoordLocation = glGetAttribLocation(shaderSets.get(0).shaderProgram, "a_texCoord");
-        shaderSets.get(0).samplerTexture0Location = glGetUniformLocation(shaderSets.get(0).shaderProgram, "s_texture0");
-        shaderSets.get(0).uniformClipMatrixLocation = glGetUniformLocation(shaderSets.get(0).shaderProgram, "u_clipMatrix");
-        shaderSets.get(0).uniformChannelFlagLocation = glGetUniformLocation(shaderSets.get(0).shaderProgram, "u_channelFlag");
-        shaderSets.get(0).uniformBaseColorLocation = glGetUniformLocation(shaderSets.get(0).shaderProgram, "u_baseColor");
-        shaderSets.get(0).uniformMultiplyColorLocation = glGetUniformLocation(shaderSets.get(0).shaderProgram, "u_multiplyColor");
-        shaderSets.get(0).uniformScreenColorLocation = glGetUniformLocation(shaderSets.get(0).shaderProgram, "u_screenColor");
+        final int setupMaskShaderIndex = CubismShaderIndexFactors.UtilityShaderType.SETUP_MASK.index;
+        shaderSets.get(setupMaskShaderIndex).attributePositionLocation = glGetAttribLocation(shaderSets.get(setupMaskShaderIndex).shaderProgram, "a_position");
+        shaderSets.get(setupMaskShaderIndex).attributeTexCoordLocation = glGetAttribLocation(shaderSets.get(setupMaskShaderIndex).shaderProgram, "a_texCoord");
+        shaderSets.get(setupMaskShaderIndex).samplerTexture0Location = glGetUniformLocation(shaderSets.get(setupMaskShaderIndex).shaderProgram, "s_texture0");
+        shaderSets.get(setupMaskShaderIndex).uniformClipMatrixLocation = glGetUniformLocation(shaderSets.get(setupMaskShaderIndex).shaderProgram, "u_clipMatrix");
+        shaderSets.get(setupMaskShaderIndex).uniformChannelFlagLocation = glGetUniformLocation(shaderSets.get(setupMaskShaderIndex).shaderProgram, "u_channelFlag");
+        shaderSets.get(setupMaskShaderIndex).uniformBaseColorLocation = glGetUniformLocation(shaderSets.get(setupMaskShaderIndex).shaderProgram, "u_baseColor");
+        shaderSets.get(setupMaskShaderIndex).uniformMultiplyColorLocation = glGetUniformLocation(shaderSets.get(setupMaskShaderIndex).shaderProgram, "u_multiplyColor");
+        shaderSets.get(setupMaskShaderIndex).uniformScreenColorLocation = glGetUniformLocation(shaderSets.get(setupMaskShaderIndex).shaderProgram, "u_screenColor");
 
         // 通常
-        shaderSets.get(1).attributePositionLocation = glGetAttribLocation(shaderSets.get(1).shaderProgram, "a_position");
-        shaderSets.get(1).attributeTexCoordLocation = glGetAttribLocation(shaderSets.get(1).shaderProgram, "a_texCoord");
-        shaderSets.get(1).samplerTexture0Location = glGetUniformLocation(shaderSets.get(1).shaderProgram, "s_texture0");
-        shaderSets.get(1).uniformMatrixLocation = glGetUniformLocation(shaderSets.get(1).shaderProgram, "u_matrix");
-        shaderSets.get(1).uniformBaseColorLocation = glGetUniformLocation(shaderSets.get(1).shaderProgram, "u_baseColor");
-        shaderSets.get(1).uniformMultiplyColorLocation = glGetUniformLocation(shaderSets.get(1).shaderProgram, "u_multiplyColor");
-        shaderSets.get(1).uniformScreenColorLocation = glGetUniformLocation(shaderSets.get(1).shaderProgram, "u_screenColor");
-
+        setShaderSet(shaderSets.get(normalBaseIndex), CubismShaderIndexFactors.MaskType.NONE);
         // 通常（クリッピング）
-        shaderSets.get(2).attributePositionLocation = glGetAttribLocation(shaderSets.get(2).shaderProgram, "a_position");
-        shaderSets.get(2).attributeTexCoordLocation = glGetAttribLocation(shaderSets.get(2).shaderProgram, "a_texCoord");
-        shaderSets.get(2).samplerTexture0Location = glGetUniformLocation(shaderSets.get(2).shaderProgram, "s_texture0");
-        shaderSets.get(2).samplerTexture1Location = glGetUniformLocation(shaderSets.get(2).shaderProgram, "s_texture1");
-        shaderSets.get(2).uniformMatrixLocation = glGetUniformLocation(shaderSets.get(2).shaderProgram, "u_matrix");
-        shaderSets.get(2).uniformClipMatrixLocation = glGetUniformLocation(shaderSets.get(2).shaderProgram, "u_clipMatrix");
-        shaderSets.get(2).uniformChannelFlagLocation = glGetUniformLocation(shaderSets.get(2).shaderProgram, "u_channelFlag");
-        shaderSets.get(2).uniformBaseColorLocation = glGetUniformLocation(shaderSets.get(2).shaderProgram, "u_baseColor");
-        shaderSets.get(2).uniformMultiplyColorLocation = glGetUniformLocation(shaderSets.get(2).shaderProgram, "u_multiplyColor");
-        shaderSets.get(2).uniformScreenColorLocation = glGetUniformLocation(shaderSets.get(2).shaderProgram, "u_screenColor");
-
+        setShaderSet(shaderSets.get(normalBaseIndex + 1), CubismShaderIndexFactors.MaskType.MASKED);
         // 通常（クリッピング・反転）
-        shaderSets.get(3).attributePositionLocation = glGetAttribLocation(shaderSets.get(3).shaderProgram, "a_position");
-        shaderSets.get(3).attributeTexCoordLocation = glGetAttribLocation(shaderSets.get(3).shaderProgram, "a_texCoord");
-        shaderSets.get(3).samplerTexture0Location = glGetUniformLocation(shaderSets.get(3).shaderProgram, "s_texture0");
-        shaderSets.get(3).samplerTexture1Location = glGetUniformLocation(shaderSets.get(3).shaderProgram, "s_texture1");
-        shaderSets.get(3).uniformMatrixLocation = glGetUniformLocation(shaderSets.get(3).shaderProgram, "u_matrix");
-        shaderSets.get(3).uniformClipMatrixLocation = glGetUniformLocation(shaderSets.get(3).shaderProgram, "u_clipMatrix");
-        shaderSets.get(3).uniformChannelFlagLocation = glGetUniformLocation(shaderSets.get(3).shaderProgram, "u_channelFlag");
-        shaderSets.get(3).uniformBaseColorLocation = glGetUniformLocation(shaderSets.get(3).shaderProgram, "u_baseColor");
-        shaderSets.get(3).uniformMultiplyColorLocation = glGetUniformLocation(shaderSets.get(3).shaderProgram, "u_multiplyColor");
-        shaderSets.get(3).uniformScreenColorLocation = glGetUniformLocation(shaderSets.get(3).shaderProgram, "u_screenColor");
-
+        setShaderSet(shaderSets.get(normalBaseIndex + 2), CubismShaderIndexFactors.MaskType.MASKED_INVERTED);
         // 通常（PremultipliedAlpha）
-        shaderSets.get(4).attributePositionLocation = glGetAttribLocation(shaderSets.get(4).shaderProgram, "a_position");
-        shaderSets.get(4).attributeTexCoordLocation = glGetAttribLocation(shaderSets.get(4).shaderProgram, "a_texCoord");
-        shaderSets.get(4).samplerTexture0Location = glGetUniformLocation(shaderSets.get(4).shaderProgram, "s_texture0");
-        shaderSets.get(4).uniformMatrixLocation = glGetUniformLocation(shaderSets.get(4).shaderProgram, "u_matrix");
-        shaderSets.get(4).uniformBaseColorLocation = glGetUniformLocation(shaderSets.get(4).shaderProgram, "u_baseColor");
-        shaderSets.get(4).uniformMultiplyColorLocation = glGetUniformLocation(shaderSets.get(4).shaderProgram, "u_multiplyColor");
-        shaderSets.get(4).uniformScreenColorLocation = glGetUniformLocation(shaderSets.get(4).shaderProgram, "u_screenColor");
-
+        setShaderSet(shaderSets.get(normalBaseIndex + 3), CubismShaderIndexFactors.MaskType.PREMULTIPLIED_ALPHA);
         // 通常（クリッピング、PremultipliedAlpha）
-        shaderSets.get(5).attributePositionLocation = glGetAttribLocation(shaderSets.get(5).shaderProgram, "a_position");
-        shaderSets.get(5).attributeTexCoordLocation = glGetAttribLocation(shaderSets.get(5).shaderProgram, "a_texCoord");
-        shaderSets.get(5).samplerTexture0Location = glGetUniformLocation(shaderSets.get(5).shaderProgram, "s_texture0");
-        shaderSets.get(5).samplerTexture1Location = glGetUniformLocation(shaderSets.get(5).shaderProgram, "s_texture1");
-        shaderSets.get(5).uniformMatrixLocation = glGetUniformLocation(shaderSets.get(5).shaderProgram, "u_matrix");
-        shaderSets.get(5).uniformClipMatrixLocation = glGetUniformLocation(shaderSets.get(5).shaderProgram, "u_clipMatrix");
-        shaderSets.get(5).uniformChannelFlagLocation = glGetUniformLocation(shaderSets.get(5).shaderProgram, "u_channelFlag");
-        shaderSets.get(5).uniformBaseColorLocation = glGetUniformLocation(shaderSets.get(5).shaderProgram, "u_baseColor");
-        shaderSets.get(5).uniformMultiplyColorLocation = glGetUniformLocation(shaderSets.get(5).shaderProgram, "u_multiplyColor");
-        shaderSets.get(5).uniformScreenColorLocation = glGetUniformLocation(shaderSets.get(5).shaderProgram, "u_screenColor");
-
+        setShaderSet(shaderSets.get(normalBaseIndex + 4), CubismShaderIndexFactors.MaskType.MASKED_PREMULTIPLIED_ALPHA);
         // 通常（クリッピング・反転、PremultipliedAlpha）
-        shaderSets.get(6).attributePositionLocation = glGetAttribLocation(shaderSets.get(6).shaderProgram, "a_position");
-        shaderSets.get(6).attributeTexCoordLocation = glGetAttribLocation(shaderSets.get(6).shaderProgram, "a_texCoord");
-        shaderSets.get(6).samplerTexture0Location = glGetUniformLocation(shaderSets.get(6).shaderProgram, "s_texture0");
-        shaderSets.get(6).samplerTexture1Location = glGetUniformLocation(shaderSets.get(6).shaderProgram, "s_texture1");
-        shaderSets.get(6).uniformMatrixLocation = glGetUniformLocation(shaderSets.get(6).shaderProgram, "u_matrix");
-        shaderSets.get(6).uniformClipMatrixLocation = glGetUniformLocation(shaderSets.get(6).shaderProgram, "u_clipMatrix");
-        shaderSets.get(6).uniformChannelFlagLocation = glGetUniformLocation(shaderSets.get(6).shaderProgram, "u_channelFlag");
-        shaderSets.get(6).uniformBaseColorLocation = glGetUniformLocation(shaderSets.get(6).shaderProgram, "u_baseColor");
-        shaderSets.get(6).uniformMultiplyColorLocation = glGetUniformLocation(shaderSets.get(6).shaderProgram, "u_multiplyColor");
-        shaderSets.get(6).uniformScreenColorLocation = glGetUniformLocation(shaderSets.get(6).shaderProgram, "u_screenColor");
+        setShaderSet(shaderSets.get(normalBaseIndex + 5), CubismShaderIndexFactors.MaskType.MASKED_INVERTED_PREMULTIPLIED_ALPHA);
 
         // 加算
-        shaderSets.get(7).attributePositionLocation = glGetAttribLocation(shaderSets.get(7).shaderProgram, "a_position");
-        shaderSets.get(7).attributeTexCoordLocation = glGetAttribLocation(shaderSets.get(7).shaderProgram, "a_texCoord");
-        shaderSets.get(7).samplerTexture0Location = glGetUniformLocation(shaderSets.get(7).shaderProgram, "s_texture0");
-        shaderSets.get(7).uniformMatrixLocation = glGetUniformLocation(shaderSets.get(7).shaderProgram, "u_matrix");
-        shaderSets.get(7).uniformBaseColorLocation = glGetUniformLocation(shaderSets.get(7).shaderProgram, "u_baseColor");
-        shaderSets.get(7).uniformMultiplyColorLocation = glGetUniformLocation(shaderSets.get(7).shaderProgram, "u_multiplyColor");
-        shaderSets.get(7).uniformScreenColorLocation = glGetUniformLocation(shaderSets.get(7).shaderProgram, "u_screenColor");
-
+        setShaderSet(shaderSets.get(addBaseIndex), CubismShaderIndexFactors.MaskType.NONE);
         // 加算（クリッピング）
-        shaderSets.get(8).attributePositionLocation = glGetAttribLocation(shaderSets.get(8).shaderProgram, "a_position");
-        shaderSets.get(8).attributeTexCoordLocation = glGetAttribLocation(shaderSets.get(8).shaderProgram, "a_texCoord");
-        shaderSets.get(8).samplerTexture0Location = glGetUniformLocation(shaderSets.get(8).shaderProgram, "s_texture0");
-        shaderSets.get(8).samplerTexture1Location = glGetUniformLocation(shaderSets.get(8).shaderProgram, "s_texture1");
-        shaderSets.get(8).uniformMatrixLocation = glGetUniformLocation(shaderSets.get(8).shaderProgram, "u_matrix");
-        shaderSets.get(8).uniformClipMatrixLocation = glGetUniformLocation(shaderSets.get(8).shaderProgram, "u_clipMatrix");
-        shaderSets.get(8).uniformChannelFlagLocation = glGetUniformLocation(shaderSets.get(8).shaderProgram, "u_channelFlag");
-        shaderSets.get(8).uniformBaseColorLocation = glGetUniformLocation(shaderSets.get(8).shaderProgram, "u_baseColor");
-        shaderSets.get(8).uniformMultiplyColorLocation = glGetUniformLocation(shaderSets.get(8).shaderProgram, "u_multiplyColor");
-        shaderSets.get(8).uniformScreenColorLocation = glGetUniformLocation(shaderSets.get(8).shaderProgram, "u_screenColor");
-
+        setShaderSet(shaderSets.get(addBaseIndex + 1), CubismShaderIndexFactors.MaskType.MASKED);
         // 加算（クリッピング・反転）
-        shaderSets.get(9).attributePositionLocation = glGetAttribLocation(shaderSets.get(9).shaderProgram, "a_position");
-        shaderSets.get(9).attributeTexCoordLocation = glGetAttribLocation(shaderSets.get(9).shaderProgram, "a_texCoord");
-        shaderSets.get(9).samplerTexture0Location = glGetUniformLocation(shaderSets.get(9).shaderProgram, "s_texture0");
-        shaderSets.get(9).samplerTexture1Location = glGetUniformLocation(shaderSets.get(9).shaderProgram, "s_texture1");
-        shaderSets.get(9).uniformMatrixLocation = glGetUniformLocation(shaderSets.get(9).shaderProgram, "u_matrix");
-        shaderSets.get(9).uniformClipMatrixLocation = glGetUniformLocation(shaderSets.get(9).shaderProgram, "u_clipMatrix");
-        shaderSets.get(9).uniformChannelFlagLocation = glGetUniformLocation(shaderSets.get(9).shaderProgram, "u_channelFlag");
-        shaderSets.get(9).uniformBaseColorLocation = glGetUniformLocation(shaderSets.get(9).shaderProgram, "u_baseColor");
-        shaderSets.get(9).uniformMultiplyColorLocation = glGetUniformLocation(shaderSets.get(9).shaderProgram, "u_multiplyColor");
-        shaderSets.get(9).uniformScreenColorLocation = glGetUniformLocation(shaderSets.get(9).shaderProgram, "u_screenColor");
-
+        setShaderSet(shaderSets.get(addBaseIndex + 2), CubismShaderIndexFactors.MaskType.MASKED_INVERTED);
         // 加算（PremultipliedAlpha）
-        shaderSets.get(10).attributePositionLocation = glGetAttribLocation(shaderSets.get(10).shaderProgram, "a_position");
-        shaderSets.get(10).attributeTexCoordLocation = glGetAttribLocation(shaderSets.get(10).shaderProgram, "a_texCoord");
-        shaderSets.get(10).samplerTexture0Location = glGetUniformLocation(shaderSets.get(10).shaderProgram, "s_texture0");
-        shaderSets.get(10).uniformMatrixLocation = glGetUniformLocation(shaderSets.get(10).shaderProgram, "u_matrix");
-        shaderSets.get(10).uniformBaseColorLocation = glGetUniformLocation(shaderSets.get(10).shaderProgram, "u_baseColor");
-        shaderSets.get(10).uniformMultiplyColorLocation = glGetUniformLocation(shaderSets.get(10).shaderProgram, "u_multiplyColor");
-        shaderSets.get(10).uniformScreenColorLocation = glGetUniformLocation(shaderSets.get(10).shaderProgram, "u_screenColor");
-
+        setShaderSet(shaderSets.get(addBaseIndex + 3), CubismShaderIndexFactors.MaskType.PREMULTIPLIED_ALPHA);
         // 加算（クリッピング、PremultipliedAlpha）
-        shaderSets.get(11).attributePositionLocation = glGetAttribLocation(shaderSets.get(11).shaderProgram, "a_position");
-        shaderSets.get(11).attributeTexCoordLocation = glGetAttribLocation(shaderSets.get(11).shaderProgram, "a_texCoord");
-        shaderSets.get(11).samplerTexture0Location = glGetUniformLocation(shaderSets.get(11).shaderProgram, "s_texture0");
-        shaderSets.get(11).samplerTexture1Location = glGetUniformLocation(shaderSets.get(11).shaderProgram, "s_texture1");
-        shaderSets.get(11).uniformMatrixLocation = glGetUniformLocation(shaderSets.get(11).shaderProgram, "u_matrix");
-        shaderSets.get(11).uniformClipMatrixLocation = glGetUniformLocation(shaderSets.get(11).shaderProgram, "u_clipMatrix");
-        shaderSets.get(11).uniformChannelFlagLocation = glGetUniformLocation(shaderSets.get(11).shaderProgram, "u_channelFlag");
-        shaderSets.get(11).uniformBaseColorLocation = glGetUniformLocation(shaderSets.get(11).shaderProgram, "u_baseColor");
-        shaderSets.get(11).uniformMultiplyColorLocation = glGetUniformLocation(shaderSets.get(11).shaderProgram, "u_multiplyColor");
-        shaderSets.get(11).uniformScreenColorLocation = glGetUniformLocation(shaderSets.get(11).shaderProgram, "u_screenColor");
-
+        setShaderSet(shaderSets.get(addBaseIndex + 4), CubismShaderIndexFactors.MaskType.MASKED_PREMULTIPLIED_ALPHA);
         // 加算（クリッピング・反転、PremultipliedAlpha）
-        shaderSets.get(12).attributePositionLocation = glGetAttribLocation(shaderSets.get(12).shaderProgram, "a_position");
-        shaderSets.get(12).attributeTexCoordLocation = glGetAttribLocation(shaderSets.get(12).shaderProgram, "a_texCoord");
-        shaderSets.get(12).samplerTexture0Location = glGetUniformLocation(shaderSets.get(12).shaderProgram, "s_texture0");
-        shaderSets.get(12).samplerTexture1Location = glGetUniformLocation(shaderSets.get(12).shaderProgram, "s_texture1");
-        shaderSets.get(12).uniformMatrixLocation = glGetUniformLocation(shaderSets.get(12).shaderProgram, "u_matrix");
-        shaderSets.get(12).uniformClipMatrixLocation = glGetUniformLocation(shaderSets.get(12).shaderProgram, "u_clipMatrix");
-        shaderSets.get(12).uniformChannelFlagLocation = glGetUniformLocation(shaderSets.get(12).shaderProgram, "u_channelFlag");
-        shaderSets.get(12).uniformBaseColorLocation = glGetUniformLocation(shaderSets.get(12).shaderProgram, "u_baseColor");
-        shaderSets.get(12).uniformMultiplyColorLocation = glGetUniformLocation(shaderSets.get(12).shaderProgram, "u_multiplyColor");
-        shaderSets.get(12).uniformScreenColorLocation = glGetUniformLocation(shaderSets.get(12).shaderProgram, "u_screenColor");
+        setShaderSet(shaderSets.get(addBaseIndex + 5), CubismShaderIndexFactors.MaskType.MASKED_INVERTED_PREMULTIPLIED_ALPHA);
 
         // 乗算
-        shaderSets.get(13).attributePositionLocation = glGetAttribLocation(shaderSets.get(13).shaderProgram, "a_position");
-        shaderSets.get(13).attributeTexCoordLocation = glGetAttribLocation(shaderSets.get(13).shaderProgram, "a_texCoord");
-        shaderSets.get(13).samplerTexture0Location = glGetUniformLocation(shaderSets.get(13).shaderProgram, "s_texture0");
-        shaderSets.get(13).uniformMatrixLocation = glGetUniformLocation(shaderSets.get(13).shaderProgram, "u_matrix");
-        shaderSets.get(13).uniformBaseColorLocation = glGetUniformLocation(shaderSets.get(13).shaderProgram, "u_baseColor");
-        shaderSets.get(13).uniformMultiplyColorLocation = glGetUniformLocation(shaderSets.get(13).shaderProgram, "u_multiplyColor");
-        shaderSets.get(13).uniformScreenColorLocation = glGetUniformLocation(shaderSets.get(13).shaderProgram, "u_screenColor");
-
+        setShaderSet(shaderSets.get(multiplyBaseIndex), CubismShaderIndexFactors.MaskType.NONE);
         // 乗算（クリッピング）
-        shaderSets.get(14).attributePositionLocation = glGetAttribLocation(shaderSets.get(14).shaderProgram, "a_position");
-        shaderSets.get(14).attributeTexCoordLocation = glGetAttribLocation(shaderSets.get(14).shaderProgram, "a_texCoord");
-        shaderSets.get(14).samplerTexture0Location = glGetUniformLocation(shaderSets.get(14).shaderProgram, "s_texture0");
-        shaderSets.get(14).samplerTexture1Location = glGetUniformLocation(shaderSets.get(14).shaderProgram, "s_texture1");
-        shaderSets.get(14).uniformMatrixLocation = glGetUniformLocation(shaderSets.get(14).shaderProgram, "u_matrix");
-        shaderSets.get(14).uniformClipMatrixLocation = glGetUniformLocation(shaderSets.get(14).shaderProgram, "u_clipMatrix");
-        shaderSets.get(14).uniformChannelFlagLocation = glGetUniformLocation(shaderSets.get(14).shaderProgram, "u_channelFlag");
-        shaderSets.get(14).uniformBaseColorLocation = glGetUniformLocation(shaderSets.get(14).shaderProgram, "u_baseColor");
-        shaderSets.get(14).uniformMultiplyColorLocation = glGetUniformLocation(shaderSets.get(14).shaderProgram, "u_multiplyColor");
-        shaderSets.get(14).uniformScreenColorLocation = glGetUniformLocation(shaderSets.get(14).shaderProgram, "u_screenColor");
-
+        setShaderSet(shaderSets.get(multiplyBaseIndex + 1), CubismShaderIndexFactors.MaskType.MASKED);
         // 乗算（クリッピング・反転）
-        shaderSets.get(15).attributePositionLocation = glGetAttribLocation(shaderSets.get(15).shaderProgram, "a_position");
-        shaderSets.get(15).attributeTexCoordLocation = glGetAttribLocation(shaderSets.get(15).shaderProgram, "a_texCoord");
-        shaderSets.get(15).samplerTexture0Location = glGetUniformLocation(shaderSets.get(15).shaderProgram, "s_texture0");
-        shaderSets.get(15).samplerTexture1Location = glGetUniformLocation(shaderSets.get(15).shaderProgram, "s_texture1");
-        shaderSets.get(15).uniformMatrixLocation = glGetUniformLocation(shaderSets.get(15).shaderProgram, "u_matrix");
-        shaderSets.get(15).uniformClipMatrixLocation = glGetUniformLocation(shaderSets.get(15).shaderProgram, "u_clipMatrix");
-        shaderSets.get(15).uniformChannelFlagLocation = glGetUniformLocation(shaderSets.get(15).shaderProgram, "u_channelFlag");
-        shaderSets.get(15).uniformBaseColorLocation = glGetUniformLocation(shaderSets.get(15).shaderProgram, "u_baseColor");
-        shaderSets.get(15).uniformMultiplyColorLocation = glGetUniformLocation(shaderSets.get(15).shaderProgram, "u_multiplyColor");
-        shaderSets.get(15).uniformScreenColorLocation = glGetUniformLocation(shaderSets.get(15).shaderProgram, "u_screenColor");
-
+        setShaderSet(shaderSets.get(multiplyBaseIndex + 2), CubismShaderIndexFactors.MaskType.MASKED_INVERTED);
         // 乗算（PremultipliedAlpha）
-        shaderSets.get(16).attributePositionLocation = glGetAttribLocation(shaderSets.get(16).shaderProgram, "a_position");
-        shaderSets.get(16).attributeTexCoordLocation = glGetAttribLocation(shaderSets.get(16).shaderProgram, "a_texCoord");
-        shaderSets.get(16).samplerTexture0Location = glGetUniformLocation(shaderSets.get(16).shaderProgram, "s_texture0");
-        shaderSets.get(16).uniformMatrixLocation = glGetUniformLocation(shaderSets.get(16).shaderProgram, "u_matrix");
-        shaderSets.get(16).uniformBaseColorLocation = glGetUniformLocation(shaderSets.get(16).shaderProgram, "u_baseColor");
-        shaderSets.get(16).uniformMultiplyColorLocation = glGetUniformLocation(shaderSets.get(16).shaderProgram, "u_multiplyColor");
-        shaderSets.get(16).uniformScreenColorLocation = glGetUniformLocation(shaderSets.get(16).shaderProgram, "u_screenColor");
-
+        setShaderSet(shaderSets.get(multiplyBaseIndex + 3), CubismShaderIndexFactors.MaskType.PREMULTIPLIED_ALPHA);
         // 乗算（クリッピング、PremultipliedAlpha）
-        shaderSets.get(17).attributePositionLocation = glGetAttribLocation(shaderSets.get(17).shaderProgram, "a_position");
-        shaderSets.get(17).attributeTexCoordLocation = glGetAttribLocation(shaderSets.get(17).shaderProgram, "a_texCoord");
-        shaderSets.get(17).samplerTexture0Location = glGetUniformLocation(shaderSets.get(17).shaderProgram, "s_texture0");
-        shaderSets.get(17).samplerTexture1Location = glGetUniformLocation(shaderSets.get(17).shaderProgram, "s_texture1");
-        shaderSets.get(17).uniformMatrixLocation = glGetUniformLocation(shaderSets.get(17).shaderProgram, "u_matrix");
-        shaderSets.get(17).uniformClipMatrixLocation = glGetUniformLocation(shaderSets.get(17).shaderProgram, "u_clipMatrix");
-        shaderSets.get(17).uniformChannelFlagLocation = glGetUniformLocation(shaderSets.get(17).shaderProgram, "u_channelFlag");
-        shaderSets.get(17).uniformBaseColorLocation = glGetUniformLocation(shaderSets.get(17).shaderProgram, "u_baseColor");
-        shaderSets.get(17).uniformMultiplyColorLocation = glGetUniformLocation(shaderSets.get(17).shaderProgram, "u_multiplyColor");
-        shaderSets.get(17).uniformScreenColorLocation = glGetUniformLocation(shaderSets.get(17).shaderProgram, "u_screenColor");
-
+        setShaderSet(shaderSets.get(multiplyBaseIndex + 4), CubismShaderIndexFactors.MaskType.MASKED_PREMULTIPLIED_ALPHA);
         // 乗算（クリッピング・反転、PremultipliedAlpha）
-        shaderSets.get(18).attributePositionLocation = glGetAttribLocation(shaderSets.get(18).shaderProgram, "a_position");
-        shaderSets.get(18).attributeTexCoordLocation = glGetAttribLocation(shaderSets.get(18).shaderProgram, "a_texCoord");
-        shaderSets.get(18).samplerTexture0Location = glGetUniformLocation(shaderSets.get(18).shaderProgram, "s_texture0");
-        shaderSets.get(18).samplerTexture1Location = glGetUniformLocation(shaderSets.get(18).shaderProgram, "s_texture1");
-        shaderSets.get(18).uniformMatrixLocation = glGetUniformLocation(shaderSets.get(18).shaderProgram, "u_matrix");
-        shaderSets.get(18).uniformClipMatrixLocation = glGetUniformLocation(shaderSets.get(18).shaderProgram, "u_clipMatrix");
-        shaderSets.get(18).uniformChannelFlagLocation = glGetUniformLocation(shaderSets.get(18).shaderProgram, "u_channelFlag");
-        shaderSets.get(18).uniformBaseColorLocation = glGetUniformLocation(shaderSets.get(18).shaderProgram, "u_baseColor");
-        shaderSets.get(18).uniformMultiplyColorLocation = glGetUniformLocation(shaderSets.get(18).shaderProgram, "u_multiplyColor");
-        shaderSets.get(18).uniformScreenColorLocation = glGetUniformLocation(shaderSets.get(18).shaderProgram, "u_screenColor");
+        setShaderSet(shaderSets.get(multiplyBaseIndex + 5), CubismShaderIndexFactors.MaskType.MASKED_INVERTED_PREMULTIPLIED_ALPHA);
+
+        // ブレンドモードの組み合わせ分作成
+        {
+            int offset = CubismShaderIndexConstants.BLEND_MODE_START_INDEX;
+
+            for (int i = 0; i < CubismShaderIndexConstants.COLOR_BLEND_COUNT; i++) {
+                // Normal Overはシェーダーを作る必要がないため、1から始める。
+                final int start = (i == 0 ? 1 : 0);
+
+                for (int j = start; j < CubismShaderIndexConstants.ALPHA_BLEND_COUNT; j++) {
+                    setShaderSet(shaderSets.get(offset++), CubismShaderIndexFactors.MaskType.NONE, true);
+                    // クリッピング
+                    setShaderSet(shaderSets.get(offset++), CubismShaderIndexFactors.MaskType.MASKED, true);
+                    // クリッピング・反転
+                    setShaderSet(shaderSets.get(offset++), CubismShaderIndexFactors.MaskType.MASKED_INVERTED, true);
+                    // PremultipliedAlpha
+                    setShaderSet(shaderSets.get(offset++), CubismShaderIndexFactors.MaskType.PREMULTIPLIED_ALPHA, true);
+                    // クリッピング、PremultipliedAlpha
+                    setShaderSet(shaderSets.get(offset++), CubismShaderIndexFactors.MaskType.MASKED_PREMULTIPLIED_ALPHA, true);
+                    // クリッピング・反転、PremultipliedAlpha
+                    setShaderSet(shaderSets.get(offset++), CubismShaderIndexFactors.MaskType.MASKED_INVERTED_PREMULTIPLIED_ALPHA, true);
+                }
+            }
+        }
+    }
+
+    /**
+     * Load a shader program from files and return the shader object number.
+     *
+     * @param vertShaderName vertex shader file name
+     * @param fragShaderName fragment shader file name
+     * @return shader object number
+     */
+    private int loadShaderProgramFromFile(final String vertShaderName, final String fragShaderName) {
+        return loadShaderProgramFromFile(vertShaderName, fragShaderName, null, null);
+    }
+
+    /**
+     * Load a shader program from files and return the shader object number.
+     * Append blend mode definitions to the fragment shader code
+     * based on the specified color and alpha blend modes.
+     *
+     * @param vertShaderName vertex shader file name
+     * @param fragShaderName fragment shader file name
+     * @param colorBlendMode color blend mode
+     * @param alphaBlendMode alpha blend mode
+     * @return shader object number
+     */
+    private int loadShaderProgramFromFile(
+        final String vertShaderName,
+        final String fragShaderName,
+        CubismShaderIndexFactors.ColorBlendMode colorBlendMode,
+        CubismShaderIndexFactors.AlphaBlendMode alphaBlendMode
+    ) {
+        ICubismLoadFileFunction fileLoader = CubismFramework.getLoadFileFunction();
+
+        if (fileLoader == null) {
+            cubismLogError("File loader is not set.");
+            return 0;
+        }
+
+        // ファイルからシェーダーのソースコードを読み込み
+        byte[] vertSrc = fileLoader.load(SHADER_BASE_PATH + "/" + vertShaderName);
+        if (vertSrc == null) {
+            cubismLogError("Failed to load vertex shader.");
+            return 0;
+        }
+
+        byte[] fragSrc = fileLoader.load(SHADER_BASE_PATH + "/" + fragShaderName);
+        if (fragSrc == null) {
+            cubismLogError("Failed to load fragment shader.");
+            return 0;
+        }
+
+        String vertString = new String(vertSrc, StandardCharsets.UTF_8);
+        String fragString = new String(fragSrc, StandardCharsets.UTF_8);
+
+        // ブレンドモードの記述の必要があれば追記
+        if (colorBlendMode != null) {
+            byte[] colorBlendSrc = fileLoader.load(COLOR_BLEND_SHADER_PATH);
+            if (colorBlendSrc == null) {
+                cubismLogError("Failed to load color blend shader.");
+                return 0;
+            }
+
+            byte[] alphaBlendSrc = fileLoader.load(ALPHA_BLEND_SHADER_PATH);
+            if (alphaBlendSrc == null) {
+                cubismLogError("Failed to load alpha blend shader.");
+                return 0;
+            }
+
+            // ブレンド
+            StringBuilder buffer = new StringBuilder();
+            buffer.append("\n#define CSM_COLOR_BLEND_MODE ").append(colorBlendMode.offset).append("\n");
+            fragString += buffer.toString();
+            fragString += new String(colorBlendSrc, StandardCharsets.UTF_8);
+
+            // オーバーラップ
+            if (alphaBlendMode != null) {
+                buffer = new StringBuilder();
+                buffer.append("\n#define CSM_ALPHA_BLEND_MODE ").append(alphaBlendMode.offset).append("\n");
+                fragString += buffer.toString();
+            } else {
+                fragString += "\n#define CSM_ALPHA_BLEND_MODE 0\n";
+            }
+            fragString += new String(alphaBlendSrc, StandardCharsets.UTF_8);
+        }
+
+        // シェーダーオブジェクトを作成
+        return loadShaderProgram(vertString, fragString);
     }
 
     private void setAttribLocation(final int shaderIndex) {
@@ -872,7 +1321,82 @@ class CubismShaderAndroid {
     }
 
     /**
+     * 色関連のユニフォーム変数の設定を行う
+     *
+     * @param renderer      レンダラー
+     * @param model         描画対象のモデル
+     * @param index         描画対象のメッシュのインデックス
+     * @param shaderSet     シェーダープログラムのセット
+     * @param baseColor     ベースカラー
+     * @param multiplyColor 乗算カラー
+     * @param screenColor   スクリーンカラー
+     */
+    private void setColorUniformVariables(
+        CubismRendererAndroid renderer,
+        final CubismModel model,
+        final int index,
+        CubismShaderSet shaderSet,
+        CubismRenderer.CubismTextureColor baseColor,
+        CubismRenderer.CubismTextureColor multiplyColor,
+        CubismRenderer.CubismTextureColor screenColor
+    ) {
+        glUniform4f(
+            shaderSet.uniformBaseColorLocation,
+            baseColor.r,
+            baseColor.g,
+            baseColor.b,
+            baseColor.a
+        );
+
+        glUniform4f(
+            shaderSet.uniformMultiplyColorLocation,
+            multiplyColor.r,
+            multiplyColor.g,
+            multiplyColor.b,
+            multiplyColor.a
+        );
+
+        glUniform4f(
+            shaderSet.uniformScreenColorLocation,
+            screenColor.r,
+            screenColor.g,
+            screenColor.b,
+            screenColor.a
+        );
+    }
+
+    /**
+     * カラーチャンネル関連のユニフォーム変数の設定を行う。
+     *
+     * @param shaderSet     シェーダープログラムのセット
+     * @param contextBuffer 描画コンテクスト
+     */
+    private void setColorChannelUniformVariables(CubismShaderSet shaderSet, CubismClippingContextAndroid contextBuffer) {
+        final int channelIndex = contextBuffer.layoutChannelIndex;
+        CubismRenderer.CubismTextureColor colorChannel = contextBuffer.getClippingManager().getChannelFlagAsColor(channelIndex);
+        glUniform4f(
+            shaderSet.uniformChannelFlagLocation,
+            colorChannel.r,
+            colorChannel.g,
+            colorChannel.b,
+            colorChannel.a
+        );
+    }
+
+    /**
      * Variable that holds the loaded shader program.
      */
     private final List<CubismShaderSet> shaderSets = new ArrayList<CubismShaderSet>();
+
+    /**
+     * Reusable CubismTextureColor instance for rendering.
+     * Optimization to avoid memory allocation per frame.
+     */
+    private final CubismRenderer.CubismTextureColor reusableBaseColor = new CubismRenderer.CubismTextureColor();
+
+    /**
+     * Reusable CubismMatrix44 instance for rendering.
+     * Optimization to avoid memory allocation per frame.
+     */
+    private final CubismMatrix44 reusableMatrix = CubismMatrix44.create();
 }

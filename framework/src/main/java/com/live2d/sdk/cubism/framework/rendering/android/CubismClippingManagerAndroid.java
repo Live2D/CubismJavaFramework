@@ -7,8 +7,10 @@
 
 package com.live2d.sdk.cubism.framework.rendering.android;
 
+import com.live2d.sdk.cubism.framework.math.CubismMatrix44;
 import com.live2d.sdk.cubism.framework.model.CubismModel;
 import com.live2d.sdk.cubism.framework.rendering.ACubismClippingManager;
+import com.live2d.sdk.cubism.framework.rendering.CubismRenderer;
 import com.live2d.sdk.cubism.framework.type.csmRectF;
 
 import java.io.Closeable;
@@ -20,7 +22,7 @@ import static android.opengl.GLES20.*;
  */
 class CubismClippingManagerAndroid extends ACubismClippingManager<
     CubismClippingContextAndroid,
-    CubismOffscreenSurfaceAndroid
+    CubismRenderTargetAndroid
     > implements Closeable {
     /**
      * コンストラクタ
@@ -36,8 +38,15 @@ class CubismClippingManagerAndroid extends ACubismClippingManager<
      * @param renderer     レンダラーのインスタンス
      * @param lastFBO      フレームバッファ
      * @param lastViewport ビューポート
+     * @param drawableObjectType 描画オブジェクトの種類
      */
-    public void setupClippingContext(CubismModel model, CubismRendererAndroid renderer, int[] lastFBO, int[] lastViewport) {
+    public void setupClippingContext(
+        CubismModel model,
+        CubismRendererAndroid renderer,
+        int[] lastFBO,
+        int[] lastViewport,
+        CubismRenderer.DrawableObjectType drawableObjectType
+    ) {
         // Prepare all clipping.
         // Set only once when using the same clip (or a group of clips if there are multiple clips).
         int usingClipCount = 0;
@@ -45,7 +54,15 @@ class CubismClippingManagerAndroid extends ACubismClippingManager<
             CubismClippingContextAndroid clipContext = clippingContextListForMask.get(i);
 
             // Calculate the rectangle that encloses the entire group of drawing objects that use this clip.
-            calcClippedDrawTotalBounds(model, clipContext);
+            switch (drawableObjectType) {
+                case DRAWABLE:
+                default:
+                    calcClippedDrawableTotalBounds(model, clipContext);
+                    break;
+                case OFFSCREEN:
+                    calcClippedOffscreenTotalBounds(model, clipContext);
+                    break;
+            }
 
             if (clipContext.isUsing) {
                 // Count as in use.
@@ -58,11 +75,19 @@ class CubismClippingManagerAndroid extends ACubismClippingManager<
         }
 
         // Process of creating mask.
-        // Set up a viewport with the same size as the generated MaskBuffer.
+        // Set up a viewport with the same size as the generated RenderTarget.
         glViewport(0, 0, (int) clippingMaskBufferSize.x, (int) clippingMaskBufferSize.y);
 
         // 後の計算のためにインデックスの最初をセットする。
-        currentMaskBuffer = renderer.getMaskBuffer(0);
+        switch (drawableObjectType) {
+            case DRAWABLE:
+            default:
+                currentMaskBuffer = renderer.getDrawableMaskBuffer(0);
+                break;
+            case OFFSCREEN:
+                currentMaskBuffer = renderer.getOffscreenMaskBuffer(0);
+                break;
+        }
 
         // マスク描画処理
         currentMaskBuffer.beginDraw(lastFBO);
@@ -97,13 +122,22 @@ class CubismClippingManagerAndroid extends ACubismClippingManager<
 
             final float margin = 0.05f;
 
-            // clipContextに設定したオフスクリーンサーフェスをインデックスで取得
-            final CubismOffscreenSurfaceAndroid clipContextOffscreenSurface = renderer.getMaskBuffer(clipContext.bufferIndex);
+            // clipContextに設定したレンダーターゲットをインデックスで取得
+            CubismRenderTargetAndroid maskBuffer = null;
+            switch (drawableObjectType) {
+                case DRAWABLE:
+                default:
+                    maskBuffer = renderer.getDrawableMaskBuffer(clipContext.bufferIndex);
+                    break;
+                case OFFSCREEN:
+                    maskBuffer = renderer.getOffscreenMaskBuffer(clipContext.bufferIndex);
+                    break;
+            }
 
-            // 現在のオフスクリーンサーフェスがclipContextのものと異なる場合
-            if (currentMaskBuffer != clipContextOffscreenSurface) {
+            // 現在のレンダーターゲットがclipContextのものと異なる場合
+            if (currentMaskBuffer != maskBuffer) {
                 currentMaskBuffer.endDraw();
-                currentMaskBuffer = clipContextOffscreenSurface;
+                currentMaskBuffer = maskBuffer;
 
                 // マスク用RenderTextureをactiveにセット。
                 currentMaskBuffer.beginDraw(lastFBO);
@@ -132,6 +166,17 @@ class CubismClippingManagerAndroid extends ACubismClippingManager<
 
             clipContext.matrixForMask.setMatrix(tmpMatrixForMask);
             clipContext.matrixForDraw.setMatrix(tmpMatrixForDraw);
+
+            if (drawableObjectType == CubismRenderer.DrawableObjectType.OFFSCREEN) {
+                // clipContext * mvp^-1
+                // NOTE: インスタンス生成を回避するため既に生成済みの行列を使い回す。
+                renderer.getMvpMatrix().getInvert(reusableMatrix);
+                CubismMatrix44.multiply(
+                    reusableMatrix.getArray(),
+                    clipContext.matrixForDraw.getArray(),
+                    clipContext.matrixForDraw.getArray()
+                );
+            }
 
             // 実際の描画を行う。
             final int clipDrawCount = clipContext.clippingIdCount;
