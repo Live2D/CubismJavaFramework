@@ -52,10 +52,6 @@ class CubismRendererProfileAndroid {
         glGetIntegerv(GL_BLEND_DST_RGB, lastBlendingDstRGB, 0);
         glGetIntegerv(GL_BLEND_SRC_ALPHA, lastBlendingSrcAlpha, 0);
         glGetIntegerv(GL_BLEND_DST_ALPHA, lastBlendingDstAlpha, 0);
-
-        // Save the FBO and viewport just before drawing the model.
-        glGetIntegerv(GL_FRAMEBUFFER_BINDING, lastFBO, 0);
-        glGetIntegerv(GL_VIEWPORT, lastViewport, 0);
     }
 
     /**
@@ -106,15 +102,6 @@ class CubismRendererProfileAndroid {
             lastBlendingDstAlpha[0]
         );
     }
-
-    /**
-     * FBO just before model drawing
-     */
-    public final int[] lastFBO = new int[1];
-    /**
-     * Viewport just before drawing the model
-     */
-    public final int[] lastViewport = new int[4];
 
     /**
      * Set enable/disable of OpenGL ES 2.0 features.

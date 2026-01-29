@@ -9,6 +9,7 @@ package com.live2d.sdk.cubism.framework.rendering;
 
 import com.live2d.sdk.cubism.framework.math.CubismMatrix44;
 import com.live2d.sdk.cubism.framework.model.CubismModel;
+import com.live2d.sdk.cubism.framework.utils.CubismDebug;
 
 /**
  * A renderer which processes drawing models.
@@ -22,6 +23,20 @@ public abstract class CubismRenderer {
     public enum RendererType {
         ANDROID,
         UNKNOWN     // 不明・未定義なレンダラー
+    }
+
+    /**
+     * The type of drawable object.
+     */
+    public enum DrawableObjectType {
+        DRAWABLE(0),
+        OFFSCREEN(2);
+
+        public final int index;
+
+        DrawableObjectType(int index) {
+            this.index = index;
+        }
     }
 
     /**
@@ -50,6 +65,18 @@ public abstract class CubismRenderer {
             this.g = g;
             this.b = b;
             this.a = a;
+        }
+
+        /**
+         * Copy constructor.
+         *
+         * @param other the CubismTextureColor object to copy from
+         */
+        public CubismTextureColor(CubismTextureColor other) {
+            this.r = other.r;
+            this.g = other.g;
+            this.b = other.b;
+            this.a = other.a;
         }
 
         @Override
@@ -108,6 +135,12 @@ public abstract class CubismRenderer {
      */
     public void initialize(CubismModel model) {
         this.model = model;
+
+        // ブレンドモード使用時は必ず高精細マスク方式を使用する。
+        if (model.isBlendModeEnabled()) {
+            isUsingHighPrecisionMask(true);
+            CubismDebug.cubismLogInfo("This model uses a high-resolution mask because it operates in blend mode.");
+        }
     }
 
     /**
@@ -147,6 +180,10 @@ public abstract class CubismRenderer {
         restoreProfile();
     }
 
+    public void setRenderTargetSize(int width, int height) {
+        modelRenderTargetWidth = width;
+        modelRenderTargetHeight = height;
+    }
 
     /**
      * Get the Model-View-Projection Matrix.
@@ -335,6 +372,26 @@ public abstract class CubismRenderer {
      * Restore the state of the renderer just before drawing the model.
      */
     protected abstract void restoreProfile();
+
+    /**
+     * Configure off-screen settings just before drawing the model.
+     */
+    protected abstract void beforeDrawModelRenderTarget();
+
+    /**
+     * Configure off-screen settings just after drawing the model.
+     */
+    protected abstract void afterDrawModelRenderTarget();
+
+    /**
+     * Width of the model render target.
+     */
+    protected int modelRenderTargetWidth;
+
+    /**
+     * Height of the model render target.
+     */
+    protected int modelRenderTargetHeight;
 
     /**
      * Limit a value to a range of 0.0 to 1.0.

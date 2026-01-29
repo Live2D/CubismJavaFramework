@@ -182,6 +182,18 @@ public abstract class CubismUserModel {
     }
 
     /**
+     * Set the offscreen buffer size.
+     *
+     * @param width  width of the offscreen buffer
+     * @param height height of the offscreen buffer
+     */
+    public void setRenderTargetSize(int width, int height) {
+        if (renderer != null) {
+            renderer.setRenderTargetSize(width, height);
+        }
+    }
+
+    /**
      * Set an information of mouse dragging.
      *
      * @param x X-position of the cursor being dragging
@@ -239,6 +251,16 @@ public abstract class CubismUserModel {
      */
     public CubismModel getModel() {
         return model;
+    }
+
+    /**
+     * Returns the version of the unload MOC file.
+     *
+     * @param buffer Buffer where the MOC3 file is loaded
+     * @return Version
+     */
+    public int getMocVersionFromBuffer(final byte[] buffer) {
+        return CubismMoc.getMocVersionFromBuffer(buffer);
     }
 
     /**

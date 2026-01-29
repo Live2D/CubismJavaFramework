@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
+## [5-r.5-beta.1] - 2026-01-29
+
+### Added
+
+* Add the `ICubismLoadFileFunction` interface to allow users to implement custom file loading logic.
+* Add support for Blend mode and Offscreen drawing.
+* Add `getMocVersionFromBuffer()`function.
+  * Support for retrieving MOC version from unsupported new MOC3 files.
+
+### Changed
+
+* Change shader code to be used separately.
+* Rename `CubismOffscreenSurfaceAndroid` class to `CubismRenderTargetAndroid`.
+* Change the API called to retrieve the drawable render order from `getDrawableRenderOrder()` to `getRenderOrder()` in CubismCore.
+
+### Removed
+
+* Remove unused `CubismShaderPrograms` class following the shader separation refactor.
+
+
 ## [5-r.4.1] - 2025-07-17
 
 ### Changed
@@ -272,6 +292,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 * New released!
 
 
+[5-r.5-beta.1]: https://github.com/Live2D/CubismJavaFramework/compare/5-r.4.1...5-r.5-beta.1
 [5-r.4.1]: https://github.com/Live2D/CubismJavaFramework/compare/5-r.4...5-r.4.1
 [5-r.4]: https://github.com/Live2D/CubismJavaFramework/compare/5-r.3...5-r.4
 [5-r.3]: https://github.com/Live2D/CubismJavaFramework/compare/5-r.2...5-r.3

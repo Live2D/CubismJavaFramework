@@ -50,6 +50,11 @@ public class CubismFramework {
          * (Default value is OFF(Log outputting is not executed.))
          */
         public LogLevel loggingLevel = LogLevel.OFF;
+
+        /**
+         * File loading function.
+         */
+        public ICubismLoadFileFunction loadFileFunction;
     }
 
     /**
@@ -197,6 +202,15 @@ public class CubismFramework {
             return s_option.loggingLevel;
         }
         return LogLevel.OFF;
+    }
+
+    /**
+     * Returns the loading file function.
+     *
+     * @return Function to load the file as byte array.
+     */
+    public static ICubismLoadFileFunction getLoadFileFunction() {
+        return s_option.loadFileFunction;
     }
 
     /**

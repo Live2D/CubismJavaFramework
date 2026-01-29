@@ -11,6 +11,9 @@ trim_trailing_whitespace = true
 [*.java]
 indent_size = 4
 
+[*.{frag,vert}]
+indent_size = 4
+
 [*.gradle]
 indent_size = 4
 

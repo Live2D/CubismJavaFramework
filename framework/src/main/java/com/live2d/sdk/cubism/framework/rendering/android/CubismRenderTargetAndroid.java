@@ -8,6 +8,7 @@
 package com.live2d.sdk.cubism.framework.rendering.android;
 
 import com.live2d.sdk.cubism.framework.math.CubismVector2;
+import com.live2d.sdk.cubism.framework.rendering.ICubismRenderTarget;
 
 import java.nio.IntBuffer;
 import java.util.Arrays;
@@ -17,18 +18,18 @@ import static android.opengl.GLES20.*;
 /**
  * This class is for drawing offscreen.
  **/
-public class CubismOffscreenSurfaceAndroid {
+public class CubismRenderTargetAndroid implements ICubismRenderTarget {
     /**
      * Constructor
      */
-    public CubismOffscreenSurfaceAndroid() {}
+    public CubismRenderTargetAndroid() {}
 
     /**
      * Copy constructor
      *
      * @param offscreenSurface offscreen surface buffer
      */
-    public CubismOffscreenSurfaceAndroid(CubismOffscreenSurfaceAndroid offscreenSurface) {
+    public CubismRenderTargetAndroid(CubismRenderTargetAndroid offscreenSurface) {
         renderTexture = Arrays.copyOf(offscreenSurface.renderTexture, offscreenSurface.renderTexture.length);
         colorBuffer = Arrays.copyOf(offscreenSurface.colorBuffer, offscreenSurface.colorBuffer.length);
         oldFBO = Arrays.copyOf(offscreenSurface.oldFBO, offscreenSurface.oldFBO.length);
@@ -38,11 +39,7 @@ public class CubismOffscreenSurfaceAndroid {
         isColorBufferInherited = offscreenSurface.isColorBufferInherited;
     }
 
-    /**
-     * Begin drawing to the specific drawing target.
-     *
-     * @param restoreFBO If it is not "null", EndDraw will run glBindFrameBuffer this value.
-     **/
+    @Override
     public void beginDraw(int[] restoreFBO) {
         if (renderTexture == null) {
             return;
@@ -50,7 +47,7 @@ public class CubismOffscreenSurfaceAndroid {
 
         // Remember the back buffer surface.
         if (restoreFBO == null) {
-            glGetIntegerv(GL_FRAMEBUFFER_BINDING, IntBuffer.wrap(oldFBO));
+            glGetIntegerv(GL_FRAMEBUFFER_BINDING, oldFBO, 0);
         } else {
             oldFBO = restoreFBO;
         }
@@ -69,9 +66,7 @@ public class CubismOffscreenSurfaceAndroid {
         beginDraw(null);
     }
 
-    /**
-     * Finish drawing.
-     **/
+    @Override
     public void endDraw() {
         if (renderTexture == null) {
             return;
@@ -81,15 +76,7 @@ public class CubismOffscreenSurfaceAndroid {
         glBindFramebuffer(GL_FRAMEBUFFER, oldFBO[0]);
     }
 
-    /**
-     * Clear the rendering target.
-     * Note: Call this after BeginDraw().
-     *
-     * @param r red(0.0~1.0)
-     * @param g green(0.0~1.0)
-     * @param b blue(0.0~1.0)
-     * @param a α(0.0~1.0)
-     */
+    @Override
     public void clear(final float r, final float g, final float b, final float a) {
         glClearColor(r, g, b, a);
         glClear(GL_COLOR_BUFFER_BIT);
@@ -103,22 +90,22 @@ public class CubismOffscreenSurfaceAndroid {
      *
      * @param displayBufferSize buffer size(Vector type)
      */
-    public void createOffscreenSurface(CubismVector2 displayBufferSize) {
-        createOffscreenSurface((int) displayBufferSize.x, (int) displayBufferSize.y, null);
+    public void createRenderTarget(CubismVector2 displayBufferSize) {
+        createRenderTarget((int) displayBufferSize.x, (int) displayBufferSize.y, null);
     }
 
     /**
-     * Create CubismOffscreenSurface.
+     * Create the CubismRenderTarget.
      *
      * @param displayBufferSize buffer size
      * @param colorBuffer if non-zero, use colorBuffer as pixel storage area.
      */
-    public void createOffscreenSurface(final CubismVector2 displayBufferSize, final int[] colorBuffer) {
-        createOffscreenSurface((int) displayBufferSize.x, (int) displayBufferSize.y, colorBuffer);
+    public void createRenderTarget(final CubismVector2 displayBufferSize, final int[] colorBuffer) {
+        createRenderTarget((int) displayBufferSize.x, (int) displayBufferSize.y, colorBuffer);
     }
 
     /**
-     * Create CubismOffscreenSurface.
+     * Create the CubismRenderTarget.
      * <p>
      * This method reproduces default argument of C++. The users can use this method instead of specifying null as colorBuffer(3rd) argument.
      * </p>
@@ -126,20 +113,14 @@ public class CubismOffscreenSurfaceAndroid {
      * @param displayBufferWidth buffer width
      * @param displayBufferHeight buffer height
      */
-    public void createOffscreenSurface(int displayBufferWidth, int displayBufferHeight) {
-        createOffscreenSurface(displayBufferWidth, displayBufferHeight, null);
+    public void createRenderTarget(int displayBufferWidth, int displayBufferHeight) {
+        createRenderTarget(displayBufferWidth, displayBufferHeight, null);
     }
 
-    /**
-     * Create CubismOffscreenSurface.
-     *
-     * @param displayBufferWidth buffer width
-     * @param displayBufferHeight buffer height
-     * @param colorBuffer if non-zero, use colorBuffer as pixel storage area.
-     */
-    public void createOffscreenSurface(final int displayBufferWidth, final int displayBufferHeight, final int[] colorBuffer) {
+    @Override
+    public void createRenderTarget(final int displayBufferWidth, final int displayBufferHeight, final int[] colorBuffer) {
         // いったん削除
-        destroyOffscreenSurface();
+        destroyRenderTarget();
 
         int[] ret = new int[1];
 
@@ -188,10 +169,8 @@ public class CubismOffscreenSurfaceAndroid {
         bufferHeight = displayBufferHeight;
     }
 
-    /**
-     * Destroy CubismOffscreenSurface
-     */
-    public void destroyOffscreenSurface() {
+    @Override
+    public void destroyRenderTarget() {
         if (!isColorBufferInherited && (colorBuffer != null)) {
             glDeleteTextures(1, colorBuffer, 0);
             colorBuffer = null;
@@ -203,55 +182,34 @@ public class CubismOffscreenSurfaceAndroid {
         }
     }
 
-    /**
-     * レンダーテクスチャのアドレス（intの配列型）を取得する。
-     *
-     * @return レンダーテクスチャのアドレス
-     */
+    @Override
     public int[] getRenderTexture() {
         return renderTexture;
     }
 
-
-    /**
-     * Get color buffer.
-     *
-     * @return color buffer
-     */
-
+    @Override
     public int[] getColorBuffer() {
         return colorBuffer;
     }
 
-
-    /**
-     * Get buffer width
-     *
-     * @return buffer width
-     */
+    @Override
     public int getBufferWidth() {
         return bufferWidth;
     }
 
-
-    /**
-     * Get buffer height.
-     *
-     * @return buffer height
-     */
+    @Override
     public int getBufferHeight() {
         return bufferHeight;
     }
 
-
-    /**
-     * Whether render texture is valid.
-     *
-     * @return If it is valid, return true
-     */
-
+    @Override
     public boolean isValid() {
         return renderTexture != null;
+    }
+
+    @Override
+    public int[] getOldFBO() {
+        return oldFBO;
     }
 
     /**
@@ -267,17 +225,10 @@ public class CubismOffscreenSurfaceAndroid {
         return (width == bufferWidth && height == bufferHeight);
     }
 
-    /**
-     * Whether buffer size is the same.
-     *
-     * @param width buffer width
-     * @param height buffer height
-     * @return Whether buffer size is the same
-     */
+    @Override
     public boolean isSameSize(final int width, final int height) {
         return (width == bufferWidth && height == bufferHeight);
     }
-
 
     /**
      * texture as rendering target. It is called frame buffer.
