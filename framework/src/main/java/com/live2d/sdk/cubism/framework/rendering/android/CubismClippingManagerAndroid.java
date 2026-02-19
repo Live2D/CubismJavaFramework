@@ -54,15 +54,7 @@ class CubismClippingManagerAndroid extends ACubismClippingManager<
             CubismClippingContextAndroid clipContext = clippingContextListForMask.get(i);
 
             // Calculate the rectangle that encloses the entire group of drawing objects that use this clip.
-            switch (drawableObjectType) {
-                case DRAWABLE:
-                default:
-                    calcClippedDrawableTotalBounds(model, clipContext);
-                    break;
-                case OFFSCREEN:
-                    calcClippedOffscreenTotalBounds(model, clipContext);
-                    break;
-            }
+            calcClippedTotalBounds(model, clipContext, drawableObjectType);
 
             if (clipContext.isUsing) {
                 // Count as in use.

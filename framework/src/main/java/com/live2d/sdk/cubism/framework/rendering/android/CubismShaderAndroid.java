@@ -429,14 +429,12 @@ class CubismShaderAndroid {
 
         final boolean isMasked = renderer.getClippingContextBufferForOffscreen() != null;  // この描画オブジェクトはマスク対象か？
         final boolean isInvertedMask = model.getOffscreenInvertedMask(offscreenIndex);
-        final boolean isPremultipliedAlpha = renderer.isPremultipliedAlpha();
-
         final csmBlendMode blendMode = model.getOffscreenBlendModeType(offscreenIndex);
 
         final int shaderIndex = CubismShaderIndexCalculator.calculateShaderIndex(
             blendMode,
             determineMaskState(isMasked, isInvertedMask),
-            isPremultipliedAlpha
+            true    // オフスクリーン描画の場合は常にPremultipliedAlphaとして扱う。
         );
         CubismShaderSet shaderSet = shaderSets.get(shaderIndex);
 

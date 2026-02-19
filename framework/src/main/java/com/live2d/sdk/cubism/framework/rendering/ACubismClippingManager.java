@@ -66,7 +66,7 @@ public abstract class ACubismClippingManager<
     @Override
     public void close() {
         clippingContextListForMask.clear();
-        clippingContextListForDrawable.clear();
+        clippingContextListForDraw.clear();
         clippingContextListForOffscreen.clear();
 
         channelColors.clear();
@@ -77,249 +77,172 @@ public abstract class ACubismClippingManager<
     }
 
     @Override
-    public void initializeForDrawable(
+    public void initialize(
         CubismRenderer.RendererType type,
         CubismModel model,
-        int maskBufferCount
+        int maskBufferCount,
+        CubismRenderer.DrawableObjectType drawableObjectType
     ) {
         renderTextureCount = maskBufferCount;
 
         // レンダーテクスチャのクリアフラグの配列の初期化
         clearedMaskBufferFlags = new boolean[renderTextureCount];
 
-        final int drawableCount = model.getDrawableCount();     // 描画オブジェクトの数
-        final int[][] drawableMasks = model.getDrawableMasks();     // 描画オブジェクトをマスクする描画オブジェクトのインデックスのリスト
-        final int[] drawableMaskCounts = model.getDrawableMaskCounts();     // 描画オブジェクトをマスクする描画オブジェクトの数
+        int objectCount = 0;        //オブジェクトの数
+        int[][] objectMasks;        // オブジェクトをマスクするオブジェクトのインデックスのリスト
+        int[] objectMaskCounts;     //オブジェクトをマスクするオブジェクトの数
+        List<T_ClippingContext> objectClippingContextList;
+
+        switch (drawableObjectType) {
+            case DRAWABLE:
+            default:
+                objectCount = model.getDrawableCount();
+                objectMasks = model.getDrawableMasks();
+                objectMaskCounts = model.getDrawableMaskCounts();
+                objectClippingContextList = clippingContextListForDraw;
+                break;
+            case OFFSCREEN:
+                objectCount = model.getOffscreenCount();
+                objectMasks = model.getOffscreenMasks();
+                objectMaskCounts = model.getOffscreenMaskCounts();
+                objectClippingContextList = clippingContextListForOffscreen;
+                break;
+        }
 
         // クリッピングマスクを使う描画オブジェクトを全て登録する。
         // クリッピングマスクは、通常数個程度に限定して使うものとする。
-        for (int i = 0; i < drawableCount; i++) {
-            if (drawableMaskCounts[i] <= 0) {
-                // クリッピングマスクが使用されていないアートメッシュ（多くの場合使用しない）
-                clippingContextListForDrawable.add(null);
+        for (int i = 0; i < objectCount; i++) {
+            if (objectMaskCounts[i] <= 0) {
+                // クリッピングマスクが使用されていない描画オブジェクト（多くの場合使用しない）
+                objectClippingContextList.add(null);
                 continue;
             }
 
             // 既にあるClipContextと同じかチェックする。
-            T_ClippingContext cc = findSameClip(drawableMasks[i], drawableMaskCounts[i]);
+            T_ClippingContext cc = findSameClip(objectMasks[i], objectMaskCounts[i]);
             if (cc == null) {
                 // 同一のマスクが存在していない場合は生成する。
                 cc = (T_ClippingContext) ACubismClippingContext.createClippingContext(
                     type,
                     this,
-                    drawableMasks[i],
-                    drawableMaskCounts[i]
+                    objectMasks[i],
+                    objectMaskCounts[i]
                 );
 
                 clippingContextListForMask.add(cc);
             }
 
-            cc.addClippedDrawable(i);
-            clippingContextListForDrawable.add(cc);
+            switch (drawableObjectType) {
+                case DRAWABLE:
+                default:
+                     cc.addClippedDrawable(i);
+                    break;
+                case OFFSCREEN:
+                    cc.addClippedOffscreen(i);
+                    break;
+            }
+
+            objectClippingContextList.add(cc);
         }
     }
 
     @Override
-    public void initializeForOffscreen(
-        CubismRenderer.RendererType type,
+    public void setupMatrixForHighPrecision(
         CubismModel model,
-        int maskBufferCount
+        boolean isRightHanded,
+        CubismRenderer.DrawableObjectType drawableObjectType,
+        final CubismMatrix44 mvp
     ) {
-        renderTextureCount = maskBufferCount;
+        // 全てのクリッピングを用意する。
+        // 同じクリップ（複数の場合はまとめて1つのクリップ）を使う場合は1度だけ設定する。
+        int usingClipCount = 0;
+        for (int clipIndex = 0; clipIndex < clippingContextListForMask.size(); clipIndex++) {
+            // 1つのクリッピングマスクに関して
+            T_ClippingContext cc = clippingContextListForMask.get(clipIndex);
 
-        // レンダーテクスチャのクリアフラグの配列の初期化
-        clearedMaskBufferFlags = new boolean[renderTextureCount];
+            // このクリップを利用する描画オブジェクト群全体を囲む矩形を計算
+            calcClippedTotalBounds(model, cc, drawableObjectType);
 
-        final int offscreenCount = model.getOffscreenCount();
-        final int[][] offscreenMasks = model.getOffscreenMasks();
-        final int[] offscreenMaskCounts = model.getOffscreenMaskCounts();
+            if (cc.isUsing) {
+                usingClipCount++;   // 使用中としてカウント
+            }
+        }
 
-        // クリッピングマスクを使うオフスクリーンを全て登録する。
-        // クリッピングマスクは、通常数個程度に限定して使うものとする。
-        for (int i = 0; i < offscreenCount; i++) {
-            if (offscreenMaskCounts[i] <= 0) {
-                // クリッピングマスクが使用されていないオフスクリーン（多くの場合使用しない）
-                clippingContextListForOffscreen.add(null);
-                continue;
+        // マスク行列作成処理
+        if (usingClipCount <= 0) {
+            return;     // クリッピングマスクが存在しない場合何もしない。
+        }
+
+        setupLayoutBounds(0);
+
+        // サイズがレンダーテクスチャの枚数と合わない場合は合わせる。
+        if (clearedMaskBufferFlags.length != renderTextureCount) {
+            clearedMaskBufferFlags = new boolean[renderTextureCount];
+        }
+        // マスクのクリアフラグを毎フレーム開始時に初期化する。
+        else {
+            for (int i = 0; i < renderTextureCount; i++) {
+                clearedMaskBufferFlags[i] = false;
+            }
+        }
+
+        // 実際にマスクを生成する。
+        // 全てのマスクをどのようにレイアウトして描くかを決定し、ClipContext, ClippedDrawContextに記憶する。
+        for (int clipIndex = 0; clipIndex < clippingContextListForMask.size(); clipIndex++) {
+            // ---- 実際に1つのマスクを描く ----
+            T_ClippingContext clipContext = clippingContextListForMask.get(clipIndex);
+            csmRectF allClippedDrawRect = clipContext.allClippedDrawRect;   // このマスクを使う、全ての描画オブジェクトの論理座標上の囲み矩形
+            csmRectF layoutBoundsOnTex01 = clipContext.layoutBounds;    // このマスクを収める
+
+            final float margin = 0.05f;
+            float scaleX, scaleY;
+            final float ppu = model.getPixelPerUnit();
+            final float maskPixelWidth = clipContext.getClippingManager().getClippingMaskBufferSize().x;
+            final float maskPixelHeight = clipContext.getClippingManager().getClippingMaskBufferSize().y;
+            final float physicalMaskWidth = layoutBoundsOnTex01.getWidth() * maskPixelWidth;
+            final float physicalMaskHeight = layoutBoundsOnTex01.getHeight() * maskPixelHeight;
+
+            tmpBoundsOnModel.setRect(allClippedDrawRect);
+
+            if (tmpBoundsOnModel.getWidth() * ppu > physicalMaskWidth) {
+                tmpBoundsOnModel.expand(allClippedDrawRect.getWidth() * margin, 0.0f);
+                scaleX = layoutBoundsOnTex01.getWidth() / tmpBoundsOnModel.getWidth();
+            } else {
+                scaleX = ppu / physicalMaskWidth;
             }
 
-            // 既にあるClipContextと同じかチェックする。
-            T_ClippingContext cc = findSameClip(offscreenMasks[i], offscreenMaskCounts[i]);
-            if (cc == null) {
-                // 同一のマスクが存在していない場合は生成する。
-                cc = (T_ClippingContext) ACubismClippingContext.createClippingContext(
-                    type,
-                    this,
-                    offscreenMasks[i],
-                    offscreenMaskCounts[i]
+            if (tmpBoundsOnModel.getHeight() * ppu > physicalMaskHeight) {
+                tmpBoundsOnModel.expand(0.0f, allClippedDrawRect.getHeight() * margin);
+                scaleY = layoutBoundsOnTex01.getHeight() / tmpBoundsOnModel.getHeight();
+            } else {
+                scaleY = ppu / physicalMaskHeight;
+            }
+
+            // マスク生成時に使う行列を求める。
+            createMatrixForMask(isRightHanded, layoutBoundsOnTex01, scaleX, scaleY);
+
+            clipContext.matrixForMask.setMatrix(tmpMatrixForMask.getArray());
+            clipContext.matrixForDraw.setMatrix(tmpMatrixForDraw.getArray());
+
+            if (drawableObjectType == CubismRenderer.DrawableObjectType.OFFSCREEN) {
+                // mvp^-1 * clipContext
+                mvp.getInvert(reusableMatrix);
+                CubismMatrix44.multiply(
+                    reusableMatrix.getArray(),
+                    clipContext.matrixForDraw.getArray(),
+                    clipContext.matrixForDraw.getArray()
                 );
-
-                clippingContextListForMask.add(cc);
             }
-
-            cc.addClippedOffscreen(i);
-
-            clippingContextListForOffscreen.add(cc);
         }
     }
 
     @Override
-    public void setupMatrixForDrawableHighPrecision(CubismModel model, boolean isRightHanded) {
-        // 全てのクリッピングを用意する。
-        // 同じクリップ（複数の場合はまとめて1つのクリップ）を使う場合は1度だけ設定する。
-        int usingClipCount = 0;
-        for (int clipIndex = 0; clipIndex < clippingContextListForMask.size(); clipIndex++) {
-            // 1つのクリッピングマスクに関して
-            T_ClippingContext cc = clippingContextListForMask.get(clipIndex);
-
-            // このクリップを利用する描画オブジェクト群全体を囲む矩形を計算
-            calcClippedDrawableTotalBounds(model, cc);
-
-            if (cc.isUsing) {
-                usingClipCount++;   // 使用中としてカウント
-            }
-        }
-
-        // マスク行列作成処理
-        if (usingClipCount <= 0) {
-            return;     // クリッピングマスクが存在しない場合何もしない。
-        }
-
-        setupLayoutBounds(0);
-
-        // サイズがレンダーテクスチャの枚数と合わない場合は合わせる。
-        if (clearedMaskBufferFlags.length != renderTextureCount) {
-            clearedMaskBufferFlags = new boolean[renderTextureCount];
-        }
-        // マスクのクリアフラグを毎フレーム開始時に初期化する。
-        else {
-            for (int i = 0; i < renderTextureCount; i++) {
-                clearedMaskBufferFlags[i] = false;
-            }
-        }
-
-        // 実際にマスクを生成する。
-        // 全てのマスクをどのようにレイアウトして描くかを決定し、ClipContext, ClippedDrawContextに記憶する。
-        for (int clipIndex = 0; clipIndex < clippingContextListForMask.size(); clipIndex++) {
-            // ---- 実際に1つのマスクを描く ----
-            T_ClippingContext clipContext = clippingContextListForMask.get(clipIndex);
-            csmRectF allClippedDrawRect = clipContext.allClippedDrawRect;   // このマスクを使う、全ての描画オブジェクトの論理座標上の囲み矩形
-            csmRectF layoutBoundsOnTex01 = clipContext.layoutBounds;    // このマスクを収める
-
-            final float margin = 0.05f;
-            float scaleX, scaleY;
-            final float ppu = model.getPixelPerUnit();
-            final float maskPixelWidth = clipContext.getClippingManager().getClippingMaskBufferSize().x;
-            final float maskPixelHeight = clipContext.getClippingManager().getClippingMaskBufferSize().y;
-            final float physicalMaskWidth = layoutBoundsOnTex01.getWidth() * maskPixelWidth;
-            final float physicalMaskHeight = layoutBoundsOnTex01.getHeight() * maskPixelHeight;
-
-            tmpBoundsOnModel.setRect(allClippedDrawRect);
-
-            if (tmpBoundsOnModel.getWidth() * ppu > physicalMaskWidth) {
-                tmpBoundsOnModel.expand(allClippedDrawRect.getWidth() * margin, 0.0f);
-                scaleX = layoutBoundsOnTex01.getWidth() / tmpBoundsOnModel.getWidth();
-            } else {
-                scaleX = ppu / physicalMaskWidth;
-            }
-
-            if (tmpBoundsOnModel.getHeight() * ppu > physicalMaskHeight) {
-                tmpBoundsOnModel.expand(0.0f, allClippedDrawRect.getHeight() * margin);
-                scaleY = layoutBoundsOnTex01.getHeight() / tmpBoundsOnModel.getHeight();
-            } else {
-                scaleY = ppu / physicalMaskHeight;
-            }
-
-            // マスク生成時に使う行列を求める。
-            createMatrixForMask(isRightHanded, layoutBoundsOnTex01, scaleX, scaleY);
-
-            clipContext.matrixForMask.setMatrix(tmpMatrixForMask.getArray());
-            clipContext.matrixForDraw.setMatrix(tmpMatrixForDraw.getArray());
-        }
-    }
-
-    @Override
-    public void setupMatrixForOffscreenHighPrecision(CubismModel model, boolean isRightHanded, final CubismMatrix44 mvp) {
-        // 全てのクリッピングを用意する。
-        // 同じクリップ（複数の場合はまとめて1つのクリップ）を使う場合は1度だけ設定する。
-        int usingClipCount = 0;
-        for (int clipIndex = 0; clipIndex < clippingContextListForMask.size(); clipIndex++) {
-            // 1つのクリッピングマスクに関して
-            T_ClippingContext cc = clippingContextListForMask.get(clipIndex);
-
-            // このクリップを利用する描画オブジェクト群全体を囲む矩形を計算
-            calcClippedOffscreenTotalBounds(model, cc);
-
-            if (cc.isUsing) {
-                usingClipCount++;   // 使用中としてカウント
-            }
-        }
-
-        // マスク行列作成処理
-        if (usingClipCount <= 0) {
-            return;     // クリッピングマスクが存在しない場合何もしない。
-        }
-
-        setupLayoutBounds(0);
-
-        // サイズがレンダーテクスチャの枚数と合わない場合は合わせる。
-        if (clearedMaskBufferFlags.length != renderTextureCount) {
-            clearedMaskBufferFlags = new boolean[renderTextureCount];
-        }
-        // マスクのクリアフラグを毎フレーム開始時に初期化する。
-        else {
-            for (int i = 0; i < renderTextureCount; i++) {
-                clearedMaskBufferFlags[i] = false;
-            }
-        }
-
-        // 実際にマスクを生成する。
-        // 全てのマスクをどのようにレイアウトして描くかを決定し、ClipContext, ClippedDrawContextに記憶する。
-        for (int clipIndex = 0; clipIndex < clippingContextListForMask.size(); clipIndex++) {
-            // ---- 実際に1つのマスクを描く ----
-            T_ClippingContext clipContext = clippingContextListForMask.get(clipIndex);
-            csmRectF allClippedDrawRect = clipContext.allClippedDrawRect;   // このマスクを使う、全ての描画オブジェクトの論理座標上の囲み矩形
-            csmRectF layoutBoundsOnTex01 = clipContext.layoutBounds;    // このマスクを収める
-
-            final float margin = 0.05f;
-            float scaleX, scaleY;
-            final float ppu = model.getPixelPerUnit();
-            final float maskPixelWidth = clipContext.getClippingManager().getClippingMaskBufferSize().x;
-            final float maskPixelHeight = clipContext.getClippingManager().getClippingMaskBufferSize().y;
-            final float physicalMaskWidth = layoutBoundsOnTex01.getWidth() * maskPixelWidth;
-            final float physicalMaskHeight = layoutBoundsOnTex01.getHeight() * maskPixelHeight;
-
-            tmpBoundsOnModel.setRect(allClippedDrawRect);
-
-            if (tmpBoundsOnModel.getWidth() * ppu > physicalMaskWidth) {
-                tmpBoundsOnModel.expand(allClippedDrawRect.getWidth() * margin, 0.0f);
-                scaleX = layoutBoundsOnTex01.getWidth() / tmpBoundsOnModel.getWidth();
-            } else {
-                scaleX = ppu / physicalMaskWidth;
-            }
-
-            if (tmpBoundsOnModel.getHeight() * ppu > physicalMaskHeight) {
-                tmpBoundsOnModel.expand(0.0f, allClippedDrawRect.getHeight() * margin);
-                scaleY = layoutBoundsOnTex01.getHeight() / tmpBoundsOnModel.getHeight();
-            } else {
-                scaleY = ppu / physicalMaskHeight;
-            }
-
-            // マスク生成時に使う行列を求める。
-            createMatrixForMask(isRightHanded, layoutBoundsOnTex01, scaleX, scaleY);
-
-            clipContext.matrixForMask.setMatrix(tmpMatrixForMask.getArray());
-            clipContext.matrixForDraw.setMatrix(tmpMatrixForDraw.getArray());
-
-            // mvp^-1 * clipContext
-            mvp.getInvert(reusableMatrix);
-
-            CubismMatrix44.multiply(
-                reusableMatrix.getArray(),
-                clipContext.matrixForDraw.getArray(),
-                clipContext.matrixForDraw.getArray()
-            );
-        }
+    public void setupMatrixForHighPrecision(
+        CubismModel model,
+        boolean isRightHanded,
+        CubismRenderer.DrawableObjectType drawableObjectType
+    ) {
+        setupMatrixForHighPrecision(model, isRightHanded, drawableObjectType, CubismMatrix44.create());
     }
 
     @Override
@@ -586,12 +509,17 @@ public abstract class ACubismClippingManager<
     }
 
     /**
-     * マスクされるdrawableの描画オブジェクト群全体を囲む矩形（モデル座標系）を計算する。
+     * マスクされる描画オブジェクト群全体を囲む矩形（モデル座標系）を計算する。
      *
-     * @param model           モデルのインスタンス
-     * @param clippingContext クリッピングマスクのコンテキスト
+     * @param model              モデルのインスタンス
+     * @param clippingContext    クリッピングマスクのコンテキスト
+     * @param drawableObjectType 処理するオブジェクトタイプ
      */
-    public void calcClippedDrawableTotalBounds(CubismModel model, T_ClippingContext clippingContext) {
+    public void calcClippedTotalBounds(
+        CubismModel model,
+        T_ClippingContext clippingContext,
+        CubismRenderer.DrawableObjectType drawableObjectType
+    ) {
         // 被クリッピングマスク（マスクされる描画オブジェクト）の全体の矩形
         float clippedDrawTotalMinX = Float.MAX_VALUE;
         float clippedDrawTotalMinY = Float.MAX_VALUE;
@@ -600,92 +528,44 @@ public abstract class ACubismClippingManager<
 
         // このマスクが実際に必要か判定する。
         // このクリッピングを利用する「描画オブジェクト」がひとつでも使用可能であればマスクを生成する必要がある。
-        final int clippedDrawCount = clippingContext.clippedDrawableIndexList.size();
-        for (int clippedDrawableIndex = 0; clippedDrawableIndex < clippedDrawCount; clippedDrawableIndex++) {
+        int clippedDrawCount = 0;
+        switch (drawableObjectType) {
+            case DRAWABLE:
+            default:
+                clippedDrawCount = clippingContext.clippedDrawableIndexList.size();
+                break;
+            case OFFSCREEN: {
+                final int clippedOffscreenCount = clippingContext.clippedOffscreenIndexList.size();
+                // マスクを使用する描画オブジェクトの描画される矩形を求める。
+                for (int clippedOffscreenIndex = 0; clippedOffscreenIndex < clippedOffscreenCount; clippedOffscreenIndex++) {
+                    final int offscreenIndex = clippingContext.clippedOffscreenIndexList.get(clippedOffscreenIndex);
+                    collectOffscreenChildDrawableIndexList(model, offscreenIndex, clippedOffscreenChildDrawableIndexList);
+                }
+                clippedDrawCount = clippedOffscreenChildDrawableIndexList.size();
+                break;
+            }
+        }
+
+        for (int clippedObjectIndex = 0; clippedObjectIndex < clippedDrawCount; clippedObjectIndex++) {
+            int drawableVertexCount = 0;
+            float[] drawableVertices;
+
             // マスクを使用する描画オブジェクトの描画される矩形を求める。
-            final int drawableIndex = clippingContext.clippedDrawableIndexList.get(clippedDrawableIndex);
-
-            final int drawableVertexCount = model.getDrawableVertexCount(drawableIndex);
-            final float[] drawableVertices = model.getDrawableVertices(drawableIndex);
-
-            float minX = Float.MAX_VALUE;
-            float minY = Float.MAX_VALUE;
-            float maxX = -Float.MAX_VALUE;
-            float maxY = -Float.MAX_VALUE;
-
-            int loop = drawableVertexCount * VERTEX_STEP;
-            for (int pi = VERTEX_OFFSET; pi < loop; pi += VERTEX_STEP) {
-                float x = drawableVertices[pi];
-                float y = drawableVertices[pi + 1];
-                if (x < minX) minX = x;
-                if (x > maxX) maxX = x;
-                if (y < minY) minY = y;
-                if (y > maxY) maxY = y;
+            switch (drawableObjectType) {
+                case DRAWABLE:
+                default: {
+                    final int drawableIndex = clippingContext.clippedDrawableIndexList.get(clippedObjectIndex);
+                    drawableVertexCount = model.getDrawableVertexCount(drawableIndex);
+                    drawableVertices = model.getDrawableVertices(drawableIndex);
+                    break;
+                }
+                case OFFSCREEN: {
+                    final int drawableIndex = clippedOffscreenChildDrawableIndexList.get(clippedObjectIndex);
+                    drawableVertexCount = model.getDrawableVertexCount(drawableIndex);
+                    drawableVertices = model.getDrawableVertices(drawableIndex);
+                    break;
+                }
             }
-
-            if (minX == Float.MAX_VALUE) {
-                continue;   // 有効な点が1つも取れなかったのでスキップする
-            }
-
-            // 全体の矩形に反映
-            if (minX < clippedDrawTotalMinX) clippedDrawTotalMinX = minX;
-            if (maxX > clippedDrawTotalMaxX) clippedDrawTotalMaxX = maxX;
-            if (minY < clippedDrawTotalMinY) clippedDrawTotalMinY = minY;
-            if (maxY > clippedDrawTotalMaxY) clippedDrawTotalMaxY = maxY;
-        }
-
-        if (clippedDrawTotalMinX == Float.MAX_VALUE) {
-            clippingContext.isUsing = false;
-
-            csmRectF clippedDrawRect = clippingContext.allClippedDrawRect;
-            clippedDrawRect.setX(0.0f);
-            clippedDrawRect.setY(0.0f);
-            clippedDrawRect.setWidth(0.0f);
-            clippedDrawRect.setHeight(0.0f);
-        } else {
-            clippingContext.isUsing = true;
-            float w = clippedDrawTotalMaxX - clippedDrawTotalMinX;
-            float h = clippedDrawTotalMaxY - clippedDrawTotalMinY;
-
-            csmRectF clippedDrawRect = clippingContext.allClippedDrawRect;
-            clippedDrawRect.setX(clippedDrawTotalMinX);
-            clippedDrawRect.setY(clippedDrawTotalMinY);
-            clippedDrawRect.setWidth(w);
-            clippedDrawRect.setHeight(h);
-        }
-    }
-
-    /**
-     * マスクされるoffscreen描画オブジェクト群全体を囲む矩形（モデル座標系）を計算する。
-     *
-     * @param model           モデルのインスタンス
-     * @param clippingContext クリッピングマスクのコンテキスト
-     */
-    public void calcClippedOffscreenTotalBounds(CubismModel model, T_ClippingContext clippingContext) {
-        // 被クリッピングマスク（マスクされる描画オブジェクト）の全体の矩形
-        float clippedDrawTotalMinX = Float.MAX_VALUE;
-        float clippedDrawTotalMinY = Float.MAX_VALUE;
-        float clippedDrawTotalMaxX = -Float.MAX_VALUE;
-        float clippedDrawTotalMaxY = -Float.MAX_VALUE;
-
-        // このマスクが実際に必要か判定する
-        // このクリッピングを利用する「描画オブジェクト」がひとつでも使用可能であればマスクを生成する必要がある
-        final int clippedOffscreenCount = clippingContext.clippedOffscreenIndexList.size();
-
-        clippedOffscreenChildDrawableIndexList.clear();
-
-        for (int clippedOffscreenIndex = 0; clippedOffscreenIndex < clippedOffscreenCount; clippedOffscreenIndex++) {
-            // マスクを使用する描画オブジェクトの描画される矩形を求める
-            final int offscreenIndex = clippingContext.clippedOffscreenIndexList.get(clippedOffscreenIndex);
-            collectOffscreenChildDrawableIndexList(model, offscreenIndex, clippedOffscreenChildDrawableIndexList);
-        }
-
-        final int childDrawableCount = clippedOffscreenChildDrawableIndexList.size();
-        for (int childDrawableIndex = 0; childDrawableIndex < childDrawableCount; ++childDrawableIndex) {
-            final int drawableIndex = clippedOffscreenChildDrawableIndexList.get(childDrawableIndex);
-
-            final int drawableVertexCount = model.getDrawableVertexCount(drawableIndex);
-            final float[] drawableVertices = model.getDrawableVertices(drawableIndex);
 
             float minX = Float.MAX_VALUE;
             float minY = Float.MAX_VALUE;
@@ -781,8 +661,8 @@ public abstract class ACubismClippingManager<
      *
      * @return 画面描画に使用するクリッピングマスクのリスト
      */
-    public List<T_ClippingContext> getClippingContextListForDrawable() {
-        return clippingContextListForDrawable;
+    public List<T_ClippingContext> getClippingContextListForDraw() {
+        return clippingContextListForDraw;
     }
 
     /**
@@ -812,9 +692,9 @@ public abstract class ACubismClippingManager<
      */
     protected final List<T_ClippingContext> clippingContextListForMask = new ArrayList<>();
     /**
-     * Drawable用クリッピングコンテキストのリスト
+     * 描画用クリッピングコンテキストのリスト
      */
-    protected final List<T_ClippingContext> clippingContextListForDrawable = new ArrayList<>();
+    protected final List<T_ClippingContext> clippingContextListForDraw = new ArrayList<>();
 
     /**
      * Offscreen用クリッピングコンテキストのリスト
