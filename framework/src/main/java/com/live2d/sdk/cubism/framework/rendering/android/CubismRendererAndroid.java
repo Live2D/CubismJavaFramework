@@ -102,10 +102,11 @@ public class CubismRendererAndroid extends CubismRenderer {
 
             // Initialize clipping mask and buffer preprocessing method
             drawableClippingManager = new CubismClippingManagerAndroid();
-            drawableClippingManager.initializeForDrawable(
+            drawableClippingManager.initialize(
                 RendererType.ANDROID,
                 model,
-                maskBufferCount
+                maskBufferCount,
+                CubismRenderer.DrawableObjectType.DRAWABLE
             );
 
             drawableMasks = new CubismRenderTargetAndroid[maskBufferCount];
@@ -121,10 +122,11 @@ public class CubismRendererAndroid extends CubismRenderer {
         if (model.isUsingMaskingForOffscreen()) {
             // クリッピングマスク・バッファ前処理方式を初期化
             offscreenClippingManager = new CubismClippingManagerAndroid();
-            offscreenClippingManager.initializeForOffscreen(
+            offscreenClippingManager.initialize(
                 RendererType.ANDROID,
                 model,
-                maskBufferCount
+                maskBufferCount,
+                CubismRenderer.DrawableObjectType.OFFSCREEN
             );
 
             offscreenMasks = new CubismRenderTargetAndroid[maskBufferCount];
@@ -281,10 +283,11 @@ public class CubismRendererAndroid extends CubismRenderer {
         drawableClippingManager = new CubismClippingManagerAndroid();
         drawableClippingManager.setClippingMaskBufferSize(width, height);
 
-        drawableClippingManager.initializeForDrawable(
+        drawableClippingManager.initialize(
             RendererType.ANDROID,
             getModel(),
-            renderTextureCount
+            renderTextureCount,
+            CubismRenderer.DrawableObjectType.DRAWABLE
         );
     }
 
@@ -308,10 +311,11 @@ public class CubismRendererAndroid extends CubismRenderer {
         offscreenClippingManager = new CubismClippingManagerAndroid();
         offscreenClippingManager.setClippingMaskBufferSize(width, height);
 
-        offscreenClippingManager.initializeForOffscreen(
+        offscreenClippingManager.initialize(
             RendererType.ANDROID,
             getModel(),
-            renderTextureCount
+            renderTextureCount,
+            CubismRenderer.DrawableObjectType.OFFSCREEN
         );
     }
 
@@ -536,7 +540,7 @@ public class CubismRendererAndroid extends CubismRenderer {
             }
 
             if (isUsingHighPrecisionMask()) {
-                drawableClippingManager.setupMatrixForDrawableHighPrecision(getModel(), false);
+                drawableClippingManager.setupMatrixForHighPrecision(getModel(), false, DrawableObjectType.DRAWABLE);
             } else {
                 drawableClippingManager.setupClippingContext(
                     getModel(),
@@ -561,9 +565,10 @@ public class CubismRendererAndroid extends CubismRenderer {
             }
 
             if (isUsingHighPrecisionMask()) {
-                offscreenClippingManager.setupMatrixForOffscreenHighPrecision(
+                offscreenClippingManager.setupMatrixForHighPrecision(
                     getModel(),
                     false,
+                    DrawableObjectType.OFFSCREEN,
                     getMvpMatrix()
                 );
             } else {
@@ -667,7 +672,7 @@ public class CubismRendererAndroid extends CubismRenderer {
 
         // クリッピングマスク
         CubismClippingContextAndroid clipContext = (drawableClippingManager != null)
-            ? drawableClippingManager.getClippingContextListForDrawable().get(drawableIndex)
+            ? drawableClippingManager.getClippingContextListForDraw().get(drawableIndex)
             : null;
 
         // マスクを描く必要がある

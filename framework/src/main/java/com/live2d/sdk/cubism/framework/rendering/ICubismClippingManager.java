@@ -33,45 +33,40 @@ public interface ICubismClippingManager {
      * @param type               レンダラーの種類
      * @param model              モデルのインスタンス
      * @param maskBufferCount    バッファの生成数
+     * @param drawableObjectType 処理するオブジェクトタイプ
      */
-    void initializeForDrawable(
+    void initialize(
         CubismRenderer.RendererType type,
         CubismModel model,
-        int maskBufferCount
-    );
-
-    /**
-     * マネージャーの初期化処理
-     * クリッピングマスクを使うOffscreenオブジェクトの登録を行う。
-     *
-     * @param type            レンダラーの種類
-     * @param model           モデルのインスタンス
-     * @param maskBufferCount バッファの生成数
-     */
-    void initializeForOffscreen(
-        CubismRenderer.RendererType type,
-        CubismModel model,
-        int maskBufferCount
+        int maskBufferCount,
+        CubismRenderer.DrawableObjectType drawableObjectType
     );
 
     /**
      * 高精細マスク処理用の行列を計算する。
      *
-     * @param model         モデルのインスタンス
-     * @param isRightHanded 処理が右手系かどうか。右手系ならtrue
+     * @param model              モデルのインスタンス
+     * @param isRightHanded      処理が右手系かどうか。右手系ならtrue
+     * @param drawableObjectType 処理するオブジェクトタイプ
      */
-    void setupMatrixForDrawableHighPrecision(CubismModel model, boolean isRightHanded);
-
-    /**
-     * offscreenの高精細マスク処理用の行列を計算する。
-     *
-     * @param model         モデルのインスタンス
-     * @param isRightHanded 処理系が右手系かどうか。右手系ならtrue
-     * @param mvp           MVP行列
-     */
-    void setupMatrixForOffscreenHighPrecision(
+    void setupMatrixForHighPrecision(
         CubismModel model,
         boolean isRightHanded,
+        CubismRenderer.DrawableObjectType drawableObjectType
+    );
+
+    /**
+     * 高精細マスク処理用の行列を計算する。
+     *
+     * @param model              モデルのインスタンス
+     * @param isRightHanded      処理が右手系かどうか。右手系ならtrue
+     * @param drawableObjectType 処理するオブジェクトタイプ
+     * @param mvp                MVP行列
+     */
+    void setupMatrixForHighPrecision(
+        CubismModel model,
+        boolean isRightHanded,
+        CubismRenderer.DrawableObjectType drawableObjectType,
         final CubismMatrix44 mvp
     );
 
