@@ -14,6 +14,7 @@ import static com.live2d.sdk.cubism.framework.utils.CubismDebug.cubismLogInfo;
 
 import com.live2d.sdk.cubism.framework.effect.CubismBreath;
 import com.live2d.sdk.cubism.framework.effect.CubismEyeBlink;
+import com.live2d.sdk.cubism.framework.effect.CubismLook;
 import com.live2d.sdk.cubism.framework.effect.CubismPose;
 import com.live2d.sdk.cubism.framework.id.CubismId;
 import com.live2d.sdk.cubism.framework.math.CubismModelMatrix;
@@ -23,6 +24,7 @@ import com.live2d.sdk.cubism.framework.motion.CubismExpressionMotionManager;
 import com.live2d.sdk.cubism.framework.motion.CubismMotion;
 import com.live2d.sdk.cubism.framework.motion.CubismMotionManager;
 import com.live2d.sdk.cubism.framework.motion.CubismMotionQueueManager;
+import com.live2d.sdk.cubism.framework.motion.CubismUpdateScheduler;
 import com.live2d.sdk.cubism.framework.motion.IBeganMotionCallback;
 import com.live2d.sdk.cubism.framework.motion.ICubismMotionEventFunction;
 import com.live2d.sdk.cubism.framework.motion.IFinishedMotionCallback;
@@ -126,10 +128,24 @@ public abstract class CubismUserModel {
      * @param maskBufferCount 生成したいマスクバッファの枚数
      */
     public void setupRenderer(CubismRenderer renderer, int maskBufferCount) {
+        if (this.renderer != null) {
+            deleteRenderer();
+        }
+
         this.renderer = renderer;
 
         // Bind a renderer with a model instance
         this.renderer.initialize(model, maskBufferCount);
+    }
+
+    /**
+     * Delete the renderer.
+     */
+    public void deleteRenderer() {
+        if (renderer != null) {
+            renderer.close();
+            renderer = null;
+        }
     }
 
     /**
@@ -332,11 +348,10 @@ public abstract class CubismUserModel {
 
         moc.delete();
         model.close();
-        renderer.close();
+        deleteRenderer();
 
         moc = null;
         model = null;
-        renderer = null;
     }
 
     /**
@@ -473,6 +488,11 @@ public abstract class CubismUserModel {
     protected CubismModel model;
 
     /**
+     * Update scheduler that runs registered {@link com.live2d.sdk.cubism.framework.motion.ACubismUpdater} instances in order.
+     */
+    protected CubismUpdateScheduler updateScheduler = new CubismUpdateScheduler();
+
+    /**
      * A motion manager
      */
     protected CubismMotionManager motionManager = new CubismMotionManager();
@@ -509,6 +529,10 @@ public abstract class CubismUserModel {
      * A user data
      */
     protected CubismModelUserData modelUserData;
+    /**
+     * Parameter following feature by target (drag input).
+     */
+    protected CubismLook look;
 
     /**
      * An initializing status
@@ -523,21 +547,9 @@ public abstract class CubismUserModel {
      */
     protected float opacity = 1.0f;
     /**
-     * A lip-sync status
-     */
-    protected boolean lipSync = true;
-    /**
      * A control value of the last lip-sync
      */
     protected float lastLipSyncValue;
-    /**
-     * An X-position of mouse dragging
-     */
-    protected float dragX;
-    /**
-     * An Y-position of mouse dragging
-     */
-    protected float dragY;
     /**
      * An acceleration in X-axis direction
      */

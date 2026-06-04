@@ -27,16 +27,16 @@ public class CubismRenderTargetAndroid implements ICubismRenderTarget {
     /**
      * Copy constructor
      *
-     * @param offscreenSurface offscreen surface buffer
+     * @param renderTarget the render target to copy from
      */
-    public CubismRenderTargetAndroid(CubismRenderTargetAndroid offscreenSurface) {
-        renderTexture = Arrays.copyOf(offscreenSurface.renderTexture, offscreenSurface.renderTexture.length);
-        colorBuffer = Arrays.copyOf(offscreenSurface.colorBuffer, offscreenSurface.colorBuffer.length);
-        oldFBO = Arrays.copyOf(offscreenSurface.oldFBO, offscreenSurface.oldFBO.length);
+    public CubismRenderTargetAndroid(CubismRenderTargetAndroid renderTarget) {
+        renderTexture = Arrays.copyOf(renderTarget.renderTexture, renderTarget.renderTexture.length);
+        colorBuffer = Arrays.copyOf(renderTarget.colorBuffer, renderTarget.colorBuffer.length);
+        oldFBO = Arrays.copyOf(renderTarget.oldFBO, renderTarget.oldFBO.length);
 
-        bufferWidth = offscreenSurface.bufferWidth;
-        bufferHeight = offscreenSurface.bufferHeight;
-        isColorBufferInherited = offscreenSurface.isColorBufferInherited;
+        bufferWidth = renderTarget.bufferWidth;
+        bufferHeight = renderTarget.bufferHeight;
+        isColorBufferInherited = renderTarget.isColorBufferInherited;
     }
 
     @Override
@@ -83,7 +83,7 @@ public class CubismRenderTargetAndroid implements ICubismRenderTarget {
     }
 
     /**
-     * Create CubismOffscreenSurface.
+     * Create CubismRenderTarget.
      * <p>
      * This method reproduces default argument of C++. The users can use this method instead of specifying null as colorBuffer(2rd) argument.
      * </p>
@@ -124,7 +124,7 @@ public class CubismRenderTargetAndroid implements ICubismRenderTarget {
 
         int[] ret = new int[1];
 
-        // Create new offscreen surface
+        // Create new render target
         if (colorBuffer == null) {
             this.colorBuffer = new int[1];
             glGenTextures(1, this.colorBuffer, 0);
@@ -142,8 +142,8 @@ public class CubismRenderTargetAndroid implements ICubismRenderTarget {
                 null);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
             glBindTexture(GL_TEXTURE_2D, 0);
 
             isColorBufferInherited = false;

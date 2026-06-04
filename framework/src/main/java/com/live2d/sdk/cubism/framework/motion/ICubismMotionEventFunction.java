@@ -7,6 +7,7 @@
 
 package com.live2d.sdk.cubism.framework.motion;
 
+@FunctionalInterface
 public interface ICubismMotionEventFunction {
     void apply(
         CubismMotionQueueManager caller,

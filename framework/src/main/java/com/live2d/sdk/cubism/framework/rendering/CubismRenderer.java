@@ -152,9 +152,7 @@ public abstract class CubismRenderer {
      */
     abstract public void initialize(CubismModel model, int maskBufferCount);
 
-    public void close() {
-        model.close();
-    }
+    public void close() {}
 
     /**
      * Draw the model.

@@ -300,6 +300,7 @@ public class CubismPhysicsInternal {
     /**
      * Functional interface with a function which gets normalized parameters.
      */
+    @FunctionalInterface
     public interface NormalizedPhysicsParameterValueGetter {
         /**
          * Get normalized parameters.
@@ -332,6 +333,7 @@ public class CubismPhysicsInternal {
     /**
      * Functional interface with a function for getting values of physics operations.
      */
+    @FunctionalInterface
     public interface PhysicsValueGetter {
         /**
          * Get values of physics operations.
@@ -356,6 +358,7 @@ public class CubismPhysicsInternal {
     /**
      * Functional interface with a function for getting the scale of physics operations.
      */
+    @FunctionalInterface
     public interface PhysicsScaleGetter {
         /**
          * Get a scale of physics operations.

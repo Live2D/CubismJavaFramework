@@ -94,7 +94,6 @@ public class CubismRendererAndroid extends CubismRenderer {
 
         if (model.isUsingMasking()) {
             // マスクバッファの枚数として、0または負の値が指定されている場合は強制的に1枚と設定し、警告ログを出力する。
-            // Webと違いCubismOffscreenSurfaceの配列を作成するため、こちらで不正値を検知し修正する。
             if (maskBufferCount < 1) {
                 maskBufferCount = 1;
                 CubismDebug.cubismLogWarning("The number of render textures must be an integer greater than or equal to 1. Set the number of render textures to 1.");
@@ -162,6 +161,9 @@ public class CubismRendererAndroid extends CubismRenderer {
         }
 
         super.initialize(model);
+
+        // シェーダの事前初期化
+        CubismShaderAndroid.getInstance();
     }
 
     /**
@@ -451,18 +453,21 @@ public class CubismRendererAndroid extends CubismRenderer {
             CubismShaderAndroid.getInstance().setupShaderProgramForDrawable(this, model, index);
         }
 
-        // Draw the prygon mesh
-        final int indexCount = model.getDrawableVertexIndexCount(index);
-        final ShortBuffer indexArrayBuffer = drawableInfoCachesHolder.setUpIndexArray(
-            index,
-            model.getDrawableVertexIndices(index)
-        );
-        glDrawElements(
-            GL_TRIANGLES,
-            indexCount,
-            GL_UNSIGNED_SHORT,
-            indexArrayBuffer
-        );
+        // ポリゴンメッシュを描画する
+        glGetIntegerv(GL_CURRENT_PROGRAM, currentProgram, 0);
+        if (currentProgram[0] != 0) {
+            final int indexCount = model.getDrawableVertexIndexCount(index);
+            final ShortBuffer indexArrayBuffer = drawableInfoCachesHolder.setUpIndexArray(
+                index,
+                model.getDrawableVertexIndices(index)
+            );
+            glDrawElements(
+                GL_TRIANGLES,
+                indexCount,
+                GL_UNSIGNED_SHORT,
+                indexArrayBuffer
+            );
+        }
 
         // post-processing
         glUseProgram(0);
@@ -1197,6 +1202,12 @@ public class CubismRendererAndroid extends CubismRenderer {
      * Root frame buffer for model rendering.
      */
     private int[] modelRootFBO = new int[1];
+
+    /**
+     * Buffer for retrieving the current shader program.
+     * Defined as a field to avoid allocating a new array every frame.
+     */
+    private final int[] currentProgram = new int[1];
 
     /**
      * Drawable情報のキャッシュ変数
