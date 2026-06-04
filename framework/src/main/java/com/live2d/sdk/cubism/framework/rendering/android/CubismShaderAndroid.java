@@ -11,6 +11,7 @@ import com.live2d.sdk.cubism.framework.CubismFramework;
 import com.live2d.sdk.cubism.framework.ICubismLoadFileFunction;
 import com.live2d.sdk.cubism.framework.math.CubismMatrix44;
 import com.live2d.sdk.cubism.framework.model.CubismModel;
+import com.live2d.sdk.cubism.framework.model.CubismModelMultiplyAndScreenColor;
 import com.live2d.sdk.cubism.framework.rendering.CubismRenderer;
 import com.live2d.sdk.cubism.framework.rendering.android.shaderindex.CubismShaderIndexCalculator;
 import com.live2d.sdk.cubism.framework.rendering.android.shaderindex.CubismShaderIndexConstants;
@@ -32,7 +33,7 @@ import static com.live2d.sdk.cubism.framework.utils.CubismDebug.cubismLogError;
 /**
  * This class manage a shader program for Android(OpenGL ES 2.0). This is singleton.
  */
-class CubismShaderAndroid {
+public class CubismShaderAndroid {
     /**
      * Tegra processor support. Enable/Disable drawing by extension method.
      *
@@ -52,6 +53,7 @@ class CubismShaderAndroid {
     public static CubismShaderAndroid getInstance() {
         if (s_instance == null) {
             s_instance = new CubismShaderAndroid();
+            s_instance.generateShaders();
         }
 
         return s_instance;
@@ -61,7 +63,10 @@ class CubismShaderAndroid {
      * Delete this singleton instance.
      */
     public static void deleteInstance() {
-        s_instance = null;
+        if (s_instance != null) {
+            s_instance.releaseShaderProgram();
+            s_instance = null;
+        }
     }
 
     /**
@@ -76,10 +81,6 @@ class CubismShaderAndroid {
         CubismModel model,
         int index
     ) {
-        if (shaderSets.isEmpty()) {
-            generateShaders();
-        }
-
         // Blending
         int srcColor;
         int dstColor;
@@ -145,45 +146,16 @@ class CubismShaderAndroid {
 
         glUseProgram(shaderSet.shaderProgram);
 
-        // キャッシュされたバッファを取得し、実際のデータを格納する。
-        CubismDrawableInfoCachesHolder drawableInfoCachesHolder = renderer.getDrawableInfoCachesHolder();
-        // vertex array
-        FloatBuffer vertexArrayBuffer = drawableInfoCachesHolder.setUpVertexArray(
-            index,
-            model.getDrawableVertices(index)
-        );
-        // uv array
-        FloatBuffer uvArrayBuffer = drawableInfoCachesHolder.setUpUvArray(
-            index,
-            model.getDrawableVertexUvs(index)
-        );
+        // テクスチャ設定
+        setUpTexture(renderer, model, index, shaderSet);
 
-        // setting of vertex array
-        glEnableVertexAttribArray(shaderSet.attributePositionLocation);
-        glVertexAttribPointer(
-            shaderSet.attributePositionLocation,
-            2,
-            GL_FLOAT,
-            false,
-            Float.SIZE / Byte.SIZE * 2,
-            vertexArrayBuffer
-        );
-
-        // setting of texture vertex
-        glEnableVertexAttribArray(shaderSet.attributeTexCoordLocation);
-        glVertexAttribPointer(
-            shaderSet.attributeTexCoordLocation,
-            2,
-            GL_FLOAT,
-            false,
-            Float.SIZE / Byte.SIZE * 2,
-            uvArrayBuffer
-        );
+        // 頂点属性設定
+        setVertexAttributes(renderer, model, index, shaderSet);
 
         if (isMasked) {
             glActiveTexture(GL_TEXTURE1);
 
-            // OffscreenSurfaceに描かれたテクスチャ
+            // RenderTargetに描かれたテクスチャ
             int tex = renderer.getDrawableMaskBuffer(renderer.getClippingContextBufferForDrawable().bufferIndex).getColorBuffer()[0];
             glBindTexture(GL_TEXTURE_2D, tex);
             glUniform1i(shaderSet.samplerTexture1Location, 1);
@@ -211,14 +183,6 @@ class CubismShaderAndroid {
                 colorChannel.a
             );
         }
-
-        // texture setting
-        int textureId = renderer.getBoundTextureId(
-            model.getDrawableTextureIndex(index)
-        );
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, textureId);
-        glUniform1i(shaderSet.samplerTexture0Location, 0);
 
         // ブレンド設定
         if (isBlendMode) {
@@ -261,8 +225,10 @@ class CubismShaderAndroid {
             );
         }
 
-        CubismRenderer.CubismTextureColor multiplyColor = model.getMultiplyColor(index);
-        CubismRenderer.CubismTextureColor screenColor = model.getScreenColor(index);
+        final CubismModelMultiplyAndScreenColor overrideMultiplyAndScreenColor = model.getOverrideMultiplyAndScreenColor();
+        CubismRenderer.CubismTextureColor multiplyColor = overrideMultiplyAndScreenColor.getDrawableMultiplyColor(index);
+        CubismRenderer.CubismTextureColor screenColor = overrideMultiplyAndScreenColor.getDrawableScreenColor(index);
+
         glUniform4f(
             shaderSet.uniformBaseColorLocation,
             baseColor.r,
@@ -300,10 +266,6 @@ class CubismShaderAndroid {
         CubismModel model,
         int index
     ) {
-        if (shaderSets.isEmpty()) {
-            generateShaders();
-        }
-
         // Blending
         int srcColor = GL_ZERO;
         int dstColor = GL_ONE_MINUS_SRC_COLOR;
@@ -314,46 +276,11 @@ class CubismShaderAndroid {
 
         glUseProgram(shaderSet.shaderProgram);
 
-        // texture setting
-        int textureId = renderer.getBoundTextureId(model.getDrawableTextureIndex(index));
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, textureId);
-        glUniform1i(shaderSet.samplerTexture0Location, 0);
+        // テクスチャ設定
+        setUpTexture(renderer, model, index, shaderSet);
 
-        // キャッシュされたバッファを取得し、実際のデータを格納する。
-        CubismDrawableInfoCachesHolder drawableInfoCachesHolder = renderer.getDrawableInfoCachesHolder();
-        // vertex array
-        FloatBuffer vertexArrayBuffer = drawableInfoCachesHolder.setUpVertexArray(
-            index,
-            model.getDrawableVertices(index)
-        );
-        // uv array
-        FloatBuffer uvArrayBuffer = drawableInfoCachesHolder.setUpUvArray(
-            index,
-            model.getDrawableVertexUvs(index)
-        );
-
-        // setting of vertex array
-        glEnableVertexAttribArray(shaderSet.attributePositionLocation);
-        glVertexAttribPointer(
-            shaderSet.attributePositionLocation,
-            2,
-            GL_FLOAT,
-            false,
-            Float.SIZE / Byte.SIZE * 2,
-            vertexArrayBuffer
-        );
-
-        // setting of texture vertex
-        glEnableVertexAttribArray(shaderSet.attributeTexCoordLocation);
-        glVertexAttribPointer(
-            shaderSet.attributeTexCoordLocation,
-            2,
-            GL_FLOAT,
-            false,
-            Float.SIZE / Byte.SIZE * 2,
-            uvArrayBuffer
-        );
+        // 頂点属性設定
+        setVertexAttributes(renderer, model, index, shaderSet);
 
         // 使用するカラーチャンネルを設定
         setColorChannelUniformVariables(
@@ -415,10 +342,6 @@ class CubismShaderAndroid {
         final CubismModel model,
         final CubismOffscreenRenderTargetAndroid offscreen
     ) {
-        if (shaderSets.isEmpty()) {
-            generateShaders();
-        }
-
         // Blending
         int srcColor;
         int dstColor;
@@ -562,8 +485,10 @@ class CubismShaderAndroid {
         baseColor.b = offscreenOpacity;
         baseColor.a = offscreenOpacity;
 
-        CubismRenderer.CubismTextureColor multiplyColor = model.getMultiplyColorOffscreen(offscreenIndex);
-        CubismRenderer.CubismTextureColor screenColor = model.getScreenColorOffscreen(offscreenIndex);
+        final CubismModelMultiplyAndScreenColor overrideMultiplyAndScreenColor = model.getOverrideMultiplyAndScreenColor();
+        CubismRenderer.CubismTextureColor multiplyColor = overrideMultiplyAndScreenColor.getOffscreenMultiplyColor(offscreenIndex);
+        CubismRenderer.CubismTextureColor screenColor = overrideMultiplyAndScreenColor.getOffscreenScreenColor(offscreenIndex);
+
         setColorUniformVariables(renderer, model, offscreenIndex, shaderSet, baseColor, multiplyColor, screenColor);
 
         glBlendFuncSeparate(srcColor, dstColor, srcAlpha, dstAlpha);
@@ -610,10 +535,6 @@ class CubismShaderAndroid {
         int dstAlpha,
         CubismRenderer.CubismTextureColor baseColor
     ) {
-        if (shaderSets.isEmpty()) {
-            generateShaders();
-        }
-
         CubismShaderSet shaderSet = shaderSets.get(CubismShaderIndexFactors.UtilityShaderType.COPY.index);
         glUseProgram(shaderSet.shaderProgram);
 
@@ -897,10 +818,18 @@ class CubismShaderAndroid {
      * Release shader programs.
      */
     private void releaseShaderProgram() {
-        for (CubismShaderSet shaderSet : shaderSets) {
-            glDeleteProgram(shaderSet.shaderProgram);
-            shaderSet.shaderProgram = 0;
+        for (int i = 0; i < shaderSets.size(); i++) {
+            if (shaderSets.get(i).shaderProgram != 0) {
+                glDeleteProgram(shaderSets.get(i).shaderProgram);
+                shaderSets.get(i).shaderProgram = 0;
+            }
         }
+    }
+
+    /**
+     * Release invalidated shader program information. Call this when the GL context has been destroyed.
+     */
+    public void releaseInvalidShaderProgram() {
         shaderSets.clear();
     }
 
@@ -908,6 +837,10 @@ class CubismShaderAndroid {
      * Initialize and generate shader programs.
      */
     private void generateShaders() {
+        if (!shaderSets.isEmpty()) {
+            return;
+        }
+
         for (int i = 0; i < CubismShaderIndexConstants.SHADER_COUNT; i++) {
             shaderSets.add(new CubismShaderSet());
         }
@@ -1316,6 +1249,68 @@ class CubismShaderAndroid {
         int[] status = new int[1];
         glGetProgramiv(shaderProgram, GL_VALIDATE_STATUS, IntBuffer.wrap(status));
         return status[0] != GL_FALSE;
+    }
+
+    /**
+     * Set up vertex attributes for drawing.
+     *
+     * @param renderer  renderer instance
+     * @param model     rendered model
+     * @param index     target drawable index
+     * @param shaderSet shader program set
+     */
+    private void setVertexAttributes(CubismRendererAndroid renderer, CubismModel model, int index, CubismShaderSet shaderSet) {
+        CubismDrawableInfoCachesHolder drawableInfoCachesHolder = renderer.getDrawableInfoCachesHolder();
+
+        // 頂点位置属性の設定
+        FloatBuffer vertexArrayBuffer = drawableInfoCachesHolder.setUpVertexArray(
+            index,
+            model.getDrawableVertices(index)
+        );
+        glEnableVertexAttribArray(shaderSet.attributePositionLocation);
+        glVertexAttribPointer(
+            shaderSet.attributePositionLocation,
+            2,
+            GL_FLOAT,
+            false,
+            Float.SIZE / Byte.SIZE * 2,
+            vertexArrayBuffer
+        );
+
+        // テクスチャ座標属性の設定
+        FloatBuffer uvArrayBuffer = drawableInfoCachesHolder.setUpUvArray(
+            index,
+            model.getDrawableVertexUvs(index)
+        );
+        glEnableVertexAttribArray(shaderSet.attributeTexCoordLocation);
+        glVertexAttribPointer(
+            shaderSet.attributeTexCoordLocation,
+            2,
+            GL_FLOAT,
+            false,
+            Float.SIZE / Byte.SIZE * 2,
+            uvArrayBuffer
+        );
+    }
+
+    /**
+     * Set up the texture for drawing.
+     *
+     * @param renderer  renderer instance
+     * @param model     rendered model
+     * @param index     target drawable index
+     * @param shaderSet shader program set
+     */
+    private void setUpTexture(CubismRendererAndroid renderer, CubismModel model, int index, CubismShaderSet shaderSet) {
+        int textureIndex = model.getDrawableTextureIndex(index);
+        int textureId = renderer.getBoundTextureId(textureIndex);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, textureId);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glUniform1i(shaderSet.samplerTexture0Location, 0);
     }
 
     /**

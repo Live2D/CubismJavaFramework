@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
+## [5-r.5] - 2026-06-04
+
+### Added
+
+* Add a validation check for the current shader program before drawing polygon meshes.
+* Add `deleteRenderer()` method to `CubismUserModel` class.
+* Add `releaseInvalidShaderProgram()` method to `CubismShaderAndroid` class for releasing resources that have already been destroyed by the environment.
+* Add `CubismUpdateScheduler` class to control the order in which model parameter updates are executed.
+* Add `CubismLook` class for drag-driven parameter following with configurable parameter IDs.
+* Add `ACubismUpdater` abstract class and per-feature Updater subclasses (`CubismBreathUpdater`, `CubismExpressionUpdater`, `CubismEyeBlinkUpdater`, `CubismLipSyncUpdater`, `CubismLookUpdater`, `CubismPhysicsUpdater`, `CubismPoseUpdater`) used by `CubismUpdateScheduler` class.
+* Add `IParameterProvider` interface used to supply parameter values such as lip sync.
+* Add `IBooleanSupplier` functional interface used to read the latest value of a boolean field on every call.
+
+### Changed
+
+* Consolidate texture setup and vertex attribute setup code into dedicated methods in `CubismShaderAndroid` class.
+* Change shader generation from draw loop to `initialize()` in `CubismRendererAndroid` class.
+* Change the visibility of `CubismShaderAndroid` class from package-private to public.
+* Separate multiply color and screen color functions into a new class with renamed methods.
+* Change sampler settings in `CubismRenderTargetAndroid` and `CubismShaderAndroid` classes to align with the OpenGL ES 2.0 setting of SDK for Native.
+
+### Fixed
+
+* Unify remaining uses of `OffscreenSurface` in comments and parameter names to `RenderTarget`.
+* Fix an issue where `close()` method in `CubismRenderer` class unintentionally released model resources.
+* Fix `setupRenderer()` method in `CubismUserModel` class to delete the existing renderer before setting up a new one.
+* Fix `CubismShaderAndroid.deleteInstance()` to properly release shader programs by calling `glDeleteProgram()`.
+* Fix missing `@FunctionalInterface` annotation on functional interfaces.
+
+### Removed
+
+* Remove `lipSync`, `dragX`, and `dragY` fields from `CubismUserModel` class. Drag-driven parameter updates have been moved into the new `CubismLook` class, invoked by `CubismLookUpdater` class. Lip sync is handled by `CubismLipSyncUpdater` class together with `IParameterProvider` interface.
+
+
 ## [5-r.5-beta.1.1] - 2026-02-19
 
 ### Fixed
@@ -301,6 +335,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 * New released!
 
 
+[5-r.5]: https://github.com/Live2D/CubismJavaFramework/compare/5-r.5-beta.1.1...5-r.5
 [5-r.5-beta.1.1]: https://github.com/Live2D/CubismJavaFramework/compare/5-r.5-beta.1...5-r.5-beta.1.1
 [5-r.5-beta.1]: https://github.com/Live2D/CubismJavaFramework/compare/5-r.4.1...5-r.5-beta.1
 [5-r.4.1]: https://github.com/Live2D/CubismJavaFramework/compare/5-r.4...5-r.4.1

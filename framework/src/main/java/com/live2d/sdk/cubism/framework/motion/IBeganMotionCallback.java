@@ -10,6 +10,7 @@ package com.live2d.sdk.cubism.framework.motion;
 /**
  * モーション再生開始コールバック
  */
+@FunctionalInterface
 public interface IBeganMotionCallback {
     void execute(ACubismMotion motion);
 }

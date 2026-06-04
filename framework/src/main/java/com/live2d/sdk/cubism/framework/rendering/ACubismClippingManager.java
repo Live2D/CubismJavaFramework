@@ -14,6 +14,7 @@ import static com.live2d.sdk.cubism.framework.utils.CubismDebug.cubismLogError;
 import com.live2d.sdk.cubism.framework.math.CubismMatrix44;
 import com.live2d.sdk.cubism.framework.math.CubismVector2;
 import com.live2d.sdk.cubism.framework.model.CubismModel;
+import com.live2d.sdk.cubism.framework.model.PartChildDrawObjects;
 import com.live2d.sdk.cubism.framework.type.csmRectF;
 
 import java.io.Closeable;
@@ -24,7 +25,7 @@ import java.util.List;
  * クリッピングマネージャーの抽象骨格クラス
  *
  * @param <T_ClippingContext> ACubismClippingContextを継承した型
- * @param <T_RenderTarget>  CubismOffscreenSurface型
+ * @param <T_RenderTarget>  CubismRenderTarget型
  */
 public abstract class ACubismClippingManager<
     T_ClippingContext extends ACubismClippingContext,
@@ -643,7 +644,7 @@ public abstract class ACubismClippingManager<
         int partIndex,
         List<Integer> childDrawableIndexList
     ) {
-        CubismModel.PartChildDrawObjects childDrawObjects = model.getPartsHierarchy().get(partIndex).childDrawObjects;
+        PartChildDrawObjects childDrawObjects = model.getPartsHierarchy().get(partIndex).childDrawObjects;
         for (int i = 0; i < childDrawObjects.drawableIndices.size(); i++) {
             childDrawableIndexList.add(childDrawObjects.drawableIndices.get(i));
         }

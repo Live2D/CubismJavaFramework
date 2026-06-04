@@ -184,6 +184,7 @@ class CubismMotionInternal {
     /**
      * For strategy pattern.
      */
+    @FunctionalInterface
     public interface CsmMotionSegmentEvaluationFunction {
         float evaluate(final List<CubismMotionPoint> points, final float time);
     }
